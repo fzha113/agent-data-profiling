@@ -68,6 +68,11 @@ Create a Databricks job from `databricks_job.example.json`, or recreate the same
 
 `jobs/run_freshness_check.py` is included for live or replayed data sources, but it is not part of the default static historical workflow. A fixed 2023 table is expected to be stale relative to the current clock.
 
+To load sample JSON files from `/Volumes/workspace/default/history_kag_sample/sample data/` into
+`workspace.default.sample_original`, run `jobs/kag_stream_station_data.py`. It reads `*.json`
+recursively, applies the same field renaming as the Kinesis ingestion notebook, and writes with
+`overwrite` mode by default.
+
 ## App Deployment
 
 Deploy this directory as a Databricks App. The app uses `app.yaml` to run:
