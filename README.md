@@ -11,8 +11,8 @@ The jobs create two historical tables from the real KAG source table:
 
 | Table | Purpose |
 | --- | --- |
-| `generation.geothermal.kag_streaming_history_base` | 2023 source slice without noise. Data quality jobs read this table. |
-| `generation.geothermal.kag_streaming_history_noisy` | 2023 source slice with one-sided 0-2% numeric noise. The app reads this table for profiling and comparison. |
+| `workspace.default.kag_streaming_history_base` | 2023 source slice without noise. Data quality jobs read this table. |
+| `workspace.default.kag_streaming_history_noisy` | 2023 source slice with one-sided 0-2% numeric noise. The app reads this table for profiling and comparison. |
 
 The noisy table uses:
 
@@ -36,27 +36,25 @@ databricks_job.example.json Example Databricks Jobs API payload
 
 ## Databricks Setup
 
-Create or grant access to these Unity Catalog objects in the target workspace:
+Create or grant access to these Unity Catalog objects in the target workspace. This version assumes all source and generated tables live under `workspace.default`:
 
 ```sql
-CREATE SCHEMA IF NOT EXISTS generation.geothermal;
-
-GRANT SELECT ON TABLE raw.pi.geothermal_kag_streaming TO `<job-runner>`;
-GRANT USE CATALOG ON CATALOG generation TO `<job-runner>`;
-GRANT USE SCHEMA ON SCHEMA generation.geothermal TO `<job-runner>`;
-GRANT CREATE TABLE ON SCHEMA generation.geothermal TO `<job-runner>`;
-GRANT MODIFY ON SCHEMA generation.geothermal TO `<job-runner>`;
+GRANT SELECT ON TABLE workspace.default.geothermal_kag_streaming TO `<job-runner>`;
+GRANT USE CATALOG ON CATALOG workspace TO `<job-runner>`;
+GRANT USE SCHEMA ON SCHEMA workspace.default TO `<job-runner>`;
+GRANT CREATE TABLE ON SCHEMA workspace.default TO `<job-runner>`;
+GRANT MODIFY ON SCHEMA workspace.default TO `<job-runner>`;
 ```
 
 After the app is created, grant the app service principal access:
 
 ```sql
-GRANT SELECT ON TABLE generation.geothermal.kag_streaming_history_noisy TO `<app-service-principal>`;
-GRANT SELECT ON TABLE generation.geothermal.monitor_incident TO `<app-service-principal>`;
-GRANT SELECT ON TABLE generation.geothermal.monitor_quality_log TO `<app-service-principal>`;
-GRANT SELECT ON TABLE generation.geothermal.monitor_incident_feedback TO `<app-service-principal>`;
-GRANT MODIFY ON TABLE generation.geothermal.monitor_incident_feedback TO `<app-service-principal>`;
-GRANT CREATE TABLE ON SCHEMA generation.geothermal TO `<app-service-principal>`;
+GRANT SELECT ON TABLE workspace.default.kag_streaming_history_noisy TO `<app-service-principal>`;
+GRANT SELECT ON TABLE workspace.default.monitor_incident TO `<app-service-principal>`;
+GRANT SELECT ON TABLE workspace.default.monitor_quality_log TO `<app-service-principal>`;
+GRANT SELECT ON TABLE workspace.default.monitor_incident_feedback TO `<app-service-principal>`;
+GRANT MODIFY ON TABLE workspace.default.monitor_incident_feedback TO `<app-service-principal>`;
+GRANT CREATE TABLE ON SCHEMA workspace.default TO `<app-service-principal>`;
 ```
 
 ## Job Deployment

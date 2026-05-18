@@ -21,12 +21,12 @@ class HistoricalDataSettings:
         noise_seed: Seed used for deterministic Databricks rand expressions.
     """
 
-    source_table: str = "raw.pi.geothermal_kag_streaming"
-    base_table: str = "generation.geothermal.kag_streaming_history_base"
-    noisy_table: str = "generation.geothermal.kag_streaming_history_noisy"
-    monitor_quality_log_table: str = "generation.geothermal.monitor_quality_log"
-    monitor_incident_table: str = "generation.geothermal.monitor_incident"
-    monitor_incident_feedback_table: str = "generation.geothermal.monitor_incident_feedback"
+    source_table: str = "workspace.default.geothermal_kag_streaming"
+    base_table: str = "workspace.default.kag_streaming_history_base"
+    noisy_table: str = "workspace.default.kag_streaming_history_noisy"
+    monitor_quality_log_table: str = "workspace.default.monitor_quality_log"
+    monitor_incident_table: str = "workspace.default.monitor_incident"
+    monitor_incident_feedback_table: str = "workspace.default.monitor_incident_feedback"
     history_start_ts: str = "2023-01-01 00:00:00"
     history_end_ts: str = "2024-01-01 00:00:00"
     timestamp_col: str = "Pi_Timestamp"

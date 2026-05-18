@@ -7,15 +7,15 @@ env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse
   - name: STREAM_CATALOG_RAW
-    value: generation
+    value: workspace
   - name: SOURCE_SCHEMA
-    value: geothermal
+    value: default
   - name: SOURCE_TABLE
     value: kag_streaming_history_noisy
   - name: MONITOR_CATALOG
-    value: generation
+    value: workspace
   - name: MONITOR_SCHEMA
-    value: geothermal
+    value: default
   - name: MONITOR_INCIDENT_TABLE
     value: monitor_incident
   - name: MONITOR_QUALITY_LOG_TABLE
