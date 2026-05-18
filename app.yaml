@@ -1,0 +1,28 @@
+command:
+  - streamlit
+  - run
+  - app.py
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: STREAM_CATALOG_RAW
+    value: generation
+  - name: SOURCE_SCHEMA
+    value: geothermal
+  - name: SOURCE_TABLE
+    value: kag_streaming_history_noisy
+  - name: MONITOR_CATALOG
+    value: generation
+  - name: MONITOR_SCHEMA
+    value: geothermal
+  - name: MONITOR_INCIDENT_TABLE
+    value: monitor_incident
+  - name: MONITOR_QUALITY_LOG_TABLE
+    value: monitor_quality_log
+  - name: MONITOR_INCIDENT_FEEDBACK_TABLE
+    value: monitor_incident_feedback
+  - name: STATION
+    value: KAG
+  - name: DATABRICKS_AI_GATEWAY_ENDPOINT
+    value: agent-data-profiling

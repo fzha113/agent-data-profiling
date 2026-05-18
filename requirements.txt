@@ -1,0 +1,7 @@
+streamlit>=1.41,<2
+streamlit-aggrid>=1.2.1.post2,<2
+plotly>=5.22,<6
+pandas>=2.2,<3
+databricks-sql-connector[pyarrow]>=4.0,<5
+databricks-sdk>=0.40,<1
+requests>=2.31,<3
