@@ -7,17 +7,17 @@ This repository does not use Databricks Asset Bundles. Runtime settings are cent
 
 ## Data Design
 
-The monitoring job reads the sample table and writes dedicated sample monitor outputs. The
-repository also keeps historical base/noisy table helpers for app profiling workflows:
+The app and monitoring job read the sample table and write dedicated sample monitor outputs. The
+repository also keeps historical base/noisy table helpers:
 
 | Table | Purpose |
 | --- | --- |
 | `workspace.default.sample_original` | One-year sample table loaded from JSON files and kept unchanged. |
-| `workspace.default.sample_noisy` | Demo-safe sample table with 0-2% one-sided numeric noise. Data quality monitoring reads this table. |
+| `workspace.default.sample_noisy` | Demo-safe sample table with 0-2% one-sided numeric noise. The app and data quality monitoring read this table. |
 | `workspace.default.sample_monitor_log` | Hourly outlier and stuck-value monitoring results for the sample table. |
 | `workspace.default.sample_monitor_incident` | Merged failed monitoring windows for the sample table. |
 | `workspace.default.kag_streaming_history_base` | 2023 source slice without noise, retained for historical table helpers. |
-| `workspace.default.kag_streaming_history_noisy` | 2023 source slice with one-sided 0-2% numeric noise. The app reads this table for profiling and comparison. |
+| `workspace.default.kag_streaming_history_noisy` | 2023 source slice with one-sided 0-2% numeric noise, retained for historical table helpers. |
 
 The noisy table uses:
 
@@ -56,7 +56,7 @@ GRANT MODIFY ON SCHEMA workspace.default TO `<job-runner>`;
 After the app is created, grant the app service principal access:
 
 ```sql
-GRANT SELECT ON TABLE workspace.default.kag_streaming_history_noisy TO `<app-service-principal>`;
+GRANT SELECT ON TABLE workspace.default.sample_noisy TO `<app-service-principal>`;
 GRANT SELECT ON TABLE workspace.default.sample_monitor_incident TO `<app-service-principal>`;
 GRANT SELECT ON TABLE workspace.default.sample_monitor_log TO `<app-service-principal>`;
 GRANT SELECT ON TABLE workspace.default.monitor_incident_feedback TO `<app-service-principal>`;

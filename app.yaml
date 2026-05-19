@@ -11,7 +11,7 @@ env:
   - name: SOURCE_SCHEMA
     value: default
   - name: SOURCE_TABLE
-    value: kag_streaming_history_noisy
+    value: sample_noisy
   - name: MONITOR_CATALOG
     value: workspace
   - name: MONITOR_SCHEMA
