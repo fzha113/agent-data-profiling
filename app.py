@@ -1,6 +1,6 @@
 import importlib
 import json
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -44,7 +44,10 @@ from agent_data_profiling.queries import (
 from agent_data_profiling.tag_catalog import DEFAULT_TAGS, TAG_CATALOG, get_catalog_tags
 
 
-DEFAULT_LOOKBACK_DAYS = 7
+DEFAULT_START_DATE = date(2024, 6, 10)
+DEFAULT_END_DATE = date(2024, 6, 17)
+DATE_PICKER_MIN_DATE = date(2024, 6, 1)
+DATE_PICKER_MAX_DATE = date(2024, 10, 1)
 LARGE_WINDOW_WARNING_DAYS = 30
 COMPARISON_PLOT_TYPES = ("Line", "Scatter")
 PROFILING_DEFAULT_TAGS = ("Net_Power",)
@@ -103,13 +106,17 @@ QUALITY_INCIDENT_SUMMARY_COLUMNS = [
 
 
 def _get_default_dates() -> tuple[datetime, datetime]:
-    end_time = datetime.now(UTC)
-    start_time = end_time - timedelta(days=DEFAULT_LOOKBACK_DAYS)
+    start_time = datetime.combine(DEFAULT_START_DATE, time.min, tzinfo=UTC)
+    end_time = datetime.combine(DEFAULT_END_DATE, time.max, tzinfo=UTC)
     return start_time, end_time
 
 
 def _combine_date_with_bound(selected_date, bound: time) -> datetime:
     return datetime.combine(selected_date, bound, tzinfo=UTC)
+
+
+def _get_date_picker_bounds() -> tuple[date, date]:
+    return DATE_PICKER_MIN_DATE, DATE_PICKER_MAX_DATE
 
 
 def to_nzt_display_datetime(value) -> datetime:
@@ -383,20 +390,20 @@ def render_profiling_sidebar() -> tuple[list[str], datetime, datetime, bool]:
     )
 
     default_start, default_end = _get_default_dates()
-    earliest_allowed = default_end.date() - timedelta(days=MAX_LOOKBACK_DAYS)
+    earliest_allowed, latest_allowed = _get_date_picker_bounds()
 
     start_date = st.sidebar.date_input(
         "Start date",
         value=default_start.date(),
         min_value=earliest_allowed,
-        max_value=default_end.date(),
+        max_value=latest_allowed,
         key=PROFILING_START_DATE_WIDGET_KEY,
     )
     end_date = st.sidebar.date_input(
         "End date",
         value=default_end.date(),
         min_value=earliest_allowed,
-        max_value=default_end.date(),
+        max_value=latest_allowed,
         key=PROFILING_END_DATE_WIDGET_KEY,
     )
 
@@ -428,7 +435,7 @@ def render_comparison_sidebar() -> tuple[
     render_sidebar_header()
     catalog_tags = list(get_catalog_tags())
     default_start, default_end = _get_default_dates()
-    earliest_allowed = default_end.date() - timedelta(days=MAX_LOOKBACK_DAYS)
+    earliest_allowed, latest_allowed = _get_date_picker_bounds()
 
     st.sidebar.subheader("Compare tags")
 
@@ -450,13 +457,13 @@ def render_comparison_sidebar() -> tuple[
         "Comparison start date",
         value=default_start.date(),
         min_value=earliest_allowed,
-        max_value=default_end.date(),
+        max_value=latest_allowed,
     )
     comparison_end_date = st.sidebar.date_input(
         "Comparison end date",
         value=default_end.date(),
         min_value=earliest_allowed,
-        max_value=default_end.date(),
+        max_value=latest_allowed,
     )
 
     comparison_start_time = _combine_date_with_bound(comparison_start_date, time.min)
