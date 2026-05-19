@@ -12,7 +12,8 @@ repository also keeps historical base/noisy table helpers for app profiling work
 
 | Table | Purpose |
 | --- | --- |
-| `workspace.default.sample_original` | One-year sample table used by the data quality monitoring job. |
+| `workspace.default.sample_original` | One-year sample table loaded from JSON files and kept unchanged. |
+| `workspace.default.sample_noisy` | Demo-safe sample table with 0-2% one-sided numeric noise. Data quality monitoring reads this table. |
 | `workspace.default.sample_monitor_log` | Hourly outlier and stuck-value monitoring results for the sample table. |
 | `workspace.default.sample_monitor_incident` | Merged failed monitoring windows for the sample table. |
 | `workspace.default.kag_streaming_history_base` | 2023 source slice without noise, retained for historical table helpers. |
@@ -24,8 +25,7 @@ The noisy table uses:
 x + rand(seed) * 0.02 * x
 ```
 
-`Pi_Timestamp` and non-numeric columns are not changed in the noisy profiling table. Data quality
-monitoring reads `workspace.default.sample_original` directly.
+`Pi_Timestamp` and non-numeric columns are not changed in noisy demo tables.
 
 ## Repository Layout
 
@@ -46,6 +46,7 @@ Create or grant access to these Unity Catalog objects in the target workspace. T
 ```sql
 GRANT SELECT ON TABLE workspace.default.geothermal_kag_streaming TO `<job-runner>`;
 GRANT SELECT ON TABLE workspace.default.sample_original TO `<job-runner>`;
+GRANT SELECT ON TABLE workspace.default.sample_noisy TO `<job-runner>`;
 GRANT USE CATALOG ON CATALOG workspace TO `<job-runner>`;
 GRANT USE SCHEMA ON SCHEMA workspace.default TO `<job-runner>`;
 GRANT CREATE TABLE ON SCHEMA workspace.default TO `<job-runner>`;
@@ -69,9 +70,14 @@ Create a Databricks job from `databricks_job.example.json`, or recreate the same
 
 1. `jobs/run_sample_quality_monitoring.py`
 
-The sample monitoring job reads `workspace.default.sample_original`, evaluates `outlier` and
-`stuck_value` checks for every one-hour window from `2023-01-01 00:00:00` through
-`2024-01-01 00:00:00`, writes detailed rows to `workspace.default.sample_monitor_log`, and
+Before running the monitoring job, open and run
+`notebooks/create_sample_noisy_table.py` in the Databricks GUI. It creates
+`workspace.default.sample_noisy` from `workspace.default.sample_original` with
+`x + rand() * 0.02 * x` applied to numeric columns only. `rand()` returns values in `[0, 1)`.
+
+The sample monitoring job reads `workspace.default.sample_noisy`, evaluates `outlier` and
+`stuck_value` checks for every one-hour window from `2024-06-01 00:00:00` through
+`2024-10-01 00:00:00`, writes detailed rows to `workspace.default.sample_monitor_log`, and
 merges failed windows into `workspace.default.sample_monitor_incident`. It intentionally excludes
 `freshness_lag` because the fixed one-year sample table is expected to be stale relative to the
 current clock.
