@@ -1,5 +1,5 @@
 {
-  "name": "kag_historical_data_quality_monitoring",
+  "name": "sample_historical_data_quality_monitoring",
   "git_source": {
     "git_url": "https://github.com/fzha113/agent-data-profiling.git",
     "git_provider": "gitHub",
@@ -7,52 +7,9 @@
   },
   "tasks": [
     {
-      "task_key": "create_kag_history_tables",
+      "task_key": "sample_data_quality_monitoring",
       "spark_python_task": {
-        "python_file": "jobs/create_kag_history_tables.py",
-        "source": "GIT"
-      },
-      "job_cluster_key": "small_job_cluster"
-    },
-    {
-      "task_key": "data_outliers_check",
-      "depends_on": [
-        {
-          "task_key": "create_kag_history_tables"
-        }
-      ],
-      "spark_python_task": {
-        "python_file": "jobs/run_outlier_check.py",
-        "source": "GIT"
-      },
-      "job_cluster_key": "small_job_cluster"
-    },
-    {
-      "task_key": "data_stuck_check",
-      "depends_on": [
-        {
-          "task_key": "create_kag_history_tables"
-        }
-      ],
-      "spark_python_task": {
-        "python_file": "jobs/run_stuck_value_check.py",
-        "source": "GIT"
-      },
-      "job_cluster_key": "small_job_cluster"
-    },
-    {
-      "task_key": "incident_merging",
-      "depends_on": [
-        {
-          "task_key": "data_outliers_check"
-        },
-        {
-          "task_key": "data_stuck_check"
-        }
-      ],
-      "run_if": "ALL_DONE",
-      "spark_python_task": {
-        "python_file": "jobs/merge_incidents.py",
+        "python_file": "jobs/run_sample_quality_monitoring.py",
         "source": "GIT"
       },
       "job_cluster_key": "small_job_cluster"

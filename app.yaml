@@ -17,9 +17,9 @@ env:
   - name: MONITOR_SCHEMA
     value: default
   - name: MONITOR_INCIDENT_TABLE
-    value: monitor_incident
+    value: sample_monitor_incident
   - name: MONITOR_QUALITY_LOG_TABLE
-    value: monitor_quality_log
+    value: sample_monitor_log
   - name: MONITOR_INCIDENT_FEEDBACK_TABLE
     value: monitor_incident_feedback
   - name: STATION

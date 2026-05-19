@@ -61,6 +61,22 @@ def get_run_id(station: str, run_dt: datetime) -> str:
     return f"{station}__{run_dt.strftime('%Y%m%d_%H%M%S')}"
 
 
+def get_existing_rule_tags(spark, source_table: str, tags: list[str]) -> list[str]:
+    """
+    Keep only rule tags that exist in the source table, preserving table casing.
+
+    Args:
+        spark: Active Spark session.
+        source_table: Full source table name.
+        tags: Candidate tags from rule configuration.
+
+    Returns:
+        list[str]: Existing tag columns in the same order as the configured tags.
+    """
+    column_lookup = {column.lower(): column for column in spark.table(source_table).columns}
+    return [column_lookup[tag.lower()] for tag in tags if tag.lower() in column_lookup]
+
+
 def get_window_bounds(run_dt: datetime, window_minutes: int) -> tuple[datetime, datetime]:
     """
     Get the rounded monitoring window boundaries for a run.
@@ -89,5 +105,8 @@ def write_monitor_results(spark, rows: list[dict], table_name: str) -> None:
     Returns:
         None: This function writes rows as a side effect.
     """
+    if not rows:
+        return
+
     result_df = spark.createDataFrame(rows, schema=get_monitor_log_schema())
     result_df.write.mode("append").saveAsTable(table_name)

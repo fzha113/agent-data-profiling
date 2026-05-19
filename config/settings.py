@@ -10,6 +10,7 @@ class HistoricalDataSettings:
         source_table: Fully qualified real KAG source table.
         base_table: Fully qualified 2023 history table without noise.
         noisy_table: Fully qualified 2023 history table with numeric noise.
+        quality_source_table: Fully qualified table used by data quality jobs.
         monitor_quality_log_table: Fully qualified quality log output table.
         monitor_incident_table: Fully qualified merged incident output table.
         monitor_incident_feedback_table: Fully qualified app feedback table.
@@ -24,8 +25,9 @@ class HistoricalDataSettings:
     source_table: str = "workspace.default.geothermal_kag_streaming"
     base_table: str = "workspace.default.kag_streaming_history_base"
     noisy_table: str = "workspace.default.kag_streaming_history_noisy"
-    monitor_quality_log_table: str = "workspace.default.monitor_quality_log"
-    monitor_incident_table: str = "workspace.default.monitor_incident"
+    quality_source_table: str = "workspace.default.sample_original"
+    monitor_quality_log_table: str = "workspace.default.sample_monitor_log"
+    monitor_incident_table: str = "workspace.default.sample_monitor_incident"
     monitor_incident_feedback_table: str = "workspace.default.monitor_incident_feedback"
     history_start_ts: str = "2023-01-01 00:00:00"
     history_end_ts: str = "2024-01-01 00:00:00"
@@ -45,7 +47,7 @@ class HistoricalDataSettings:
         Returns:
             str: Fully qualified base table name.
         """
-        return self.base_table
+        return self.quality_source_table
 
     @property
     def app_profile_source_table(self) -> str:
