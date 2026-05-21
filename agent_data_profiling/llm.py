@@ -29,6 +29,8 @@ MAX_QUALITY_LOG_ROWS = 12
 APPROVED_SUPERVISOR_TOOL_NAMES = frozenset(
     {
         "app-agent-graph-assistant",
+        "app-agent-incident-analysis",
+        "app-agent-incident-dba",
         "agent-incident-analysis",
         "agent-incident-dba",
     }
