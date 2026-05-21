@@ -652,7 +652,7 @@ def _build_supervisor_request_body(
 def _extract_responses_output_text(payload: dict) -> str:
     output_text = payload.get("output_text")
     if isinstance(output_text, str):
-        return output_text
+        return _extract_final_supervisor_text(output_text)
 
     text_parts = []
     for item in payload.get("output", []):
@@ -671,13 +671,22 @@ def _extract_responses_output_text(payload: dict) -> str:
                 text_parts.append(str(part["text"]))
 
     if text_parts:
-        return "\n".join(text_parts)
+        return _extract_final_supervisor_text("\n".join(text_parts))
 
     try:
         choice = payload["choices"][0]
-        return _extract_message_content(choice["message"]["content"])
+        return _extract_final_supervisor_text(
+            _extract_message_content(choice["message"]["content"])
+        )
     except (KeyError, IndexError, TypeError):
         return ""
+
+
+def _extract_final_supervisor_text(text: str) -> str:
+    supervisor_marker = "<name>data-incident-supervisor</name>"
+    if supervisor_marker not in text:
+        return text.strip()
+    return text.rsplit(supervisor_marker, maxsplit=1)[-1].strip()
 
 
 def _normalise_responses_output(payload: dict) -> list[dict]:

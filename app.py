@@ -1020,6 +1020,47 @@ def load_supervisor_available_tags_for_ui(incident_tag: str) -> list[str]:
     return available_tags or [incident_tag]
 
 
+def get_current_databricks_user_id() -> str | None:
+    """
+    Get the signed-in Databricks user id/email from Streamlit request context.
+
+    Args:
+        None.
+
+    Returns:
+        str | None: Current Databricks user id/email when available.
+    """
+    user = getattr(st, "user", None)
+    if user is not None:
+        for key in ("email", "user_email", "preferred_username", "name"):
+            try:
+                value = user.get(key)
+            except Exception:
+                value = None
+            if value:
+                return str(value)
+
+    context = getattr(st, "context", None)
+    headers = getattr(context, "headers", {}) if context is not None else {}
+    for key in (
+        "X-Forwarded-Email",
+        "X-Databricks-User-Name",
+        "X-Databricks-User",
+        "X-Forwarded-User",
+        "x-forwarded-email",
+        "x-databricks-user-name",
+        "x-databricks-user",
+        "x-forwarded-user",
+    ):
+        try:
+            value = headers.get(key)
+        except Exception:
+            value = None
+        if value:
+            return str(value)
+    return None
+
+
 def load_supervisor_incident_analysis_for_ui(
     context: dict,
     available_tags: list[str],
@@ -1037,8 +1078,9 @@ def load_supervisor_incident_analysis_for_ui(
     try:
         config = get_supervisor_agent_config_from_env()
         prompt = build_supervisor_incident_prompt(context, available_tags)
+        user_id = get_current_databricks_user_id()
         with st.spinner("Running Supervisor Agent incident investigation..."):
-            return query_supervisor_agent(config, prompt)
+            return query_supervisor_agent(config, prompt, user_id=user_id)
     except Exception as exc:
         st.error("Failed to generate Supervisor Agent incident analysis.")
         with st.expander("Technical detail"):
