@@ -478,7 +478,13 @@ def build_incident_llm_context(
             "incident_start_nzt": _format_nzt(incident_start),
             "incident_end_nzt": _format_nzt(incident_end),
         },
-        "outlier_thresholds": _build_outlier_threshold_context(outlier_thresholds),
+        "outlier_thresholds": _build_outlier_threshold_context(
+            outlier_thresholds,
+            incident_rows,
+        ),
+        "outlier_threshold_windows": _extract_outlier_threshold_windows_from_logs(
+            incident_rows,
+        ),
         "quality_log_rows": _dataframe_records(
             incident_rows,
             [
@@ -936,14 +942,106 @@ def _build_daily_trend_summary(daily_df: pd.DataFrame) -> dict:
 
 def _build_outlier_threshold_context(
     outlier_thresholds: tuple[float, float] | None,
+    incident_rows: pd.DataFrame | None = None,
 ) -> dict | None:
+    context = _extract_outlier_threshold_context_from_logs(incident_rows)
+
     if outlier_thresholds is None:
-        return None
+        return context or None
+
     lower_threshold, upper_threshold = outlier_thresholds
+    context.setdefault("lower_threshold", _json_safe_threshold_number(lower_threshold))
+    context.setdefault("upper_threshold", _json_safe_threshold_number(upper_threshold))
+    return context
+
+
+def _extract_outlier_threshold_context_from_logs(
+    incident_rows: pd.DataFrame | None,
+) -> dict:
+    windows = _extract_outlier_threshold_windows_from_logs(incident_rows)
+    if not windows:
+        return {}
+
     return {
-        "lower_threshold": _json_safe_scalar(lower_threshold),
-        "upper_threshold": _json_safe_scalar(upper_threshold),
+        key: value
+        for key, value in windows[-1].items()
+        if key
+        in {
+            "recent_min",
+            "recent_max",
+            "history_p1",
+            "history_p99",
+            "lower_threshold",
+            "upper_threshold",
+        }
     }
+
+
+def _extract_outlier_threshold_windows_from_logs(
+    incident_rows: pd.DataFrame | None,
+) -> list[dict]:
+    if incident_rows is None or incident_rows.empty:
+        return []
+    if "observed_value" not in incident_rows.columns:
+        return []
+
+    log_rows = incident_rows.dropna(subset=["observed_value"])
+    if log_rows.empty:
+        return []
+    if "window_start" in log_rows.columns:
+        log_rows = log_rows.sort_values("window_start")
+
+    windows = []
+    for row in log_rows.to_dict("records"):
+        try:
+            payload = json.loads(row.get("observed_value"))
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+
+        threshold_context = {
+            key: _json_safe_scalar(row[key])
+            for key in ("log_run_id", "window_start", "window_end")
+            if key in row and _json_safe_scalar(row[key]) is not None
+        }
+        for key in (
+            "recent_min",
+            "recent_max",
+            "history_p1",
+            "history_p99",
+            "lower_threshold",
+            "upper_threshold",
+        ):
+            if key in payload:
+                threshold_context[key] = _json_safe_threshold_number(payload[key])
+        if any(
+            key in threshold_context
+            for key in (
+                "recent_min",
+                "recent_max",
+                "history_p1",
+                "history_p99",
+                "lower_threshold",
+                "upper_threshold",
+            )
+        ):
+            windows.append(threshold_context)
+    return windows
+
+
+def _json_safe_threshold_number(value):
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return _json_safe_scalar(value)
 
 
 def _build_raw_context_summary(
