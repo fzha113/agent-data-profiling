@@ -10,70 +10,9 @@
 USE CATALOG workspace;
 USE SCHEMA default;
 
--- The DBA functions should read the physical Delta table below so MCP tool calls
--- do not restack sample_noisy on every request.
-DROP TABLE IF EXISTS workspace.default.sample_incident_tag_values;
-
-CREATE OR REPLACE TABLE workspace.default.sample_incident_tag_values
-USING DELTA
-AS
-SELECT
-    Pi_Timestamp,
-    tag_name,
-    CAST(tag_value AS DOUBLE) AS tag_value
-FROM workspace.default.sample_noisy
-LATERAL VIEW stack(45,
-    '1ST_BRIP_A_MOTOR_SPEED', CAST(`1ST_BRIP_A_MOTOR_SPEED` AS DOUBLE),
-    '1ST_BRIP_B_MOTOR_SPEED', CAST(`1ST_BRIP_B_MOTOR_SPEED` AS DOUBLE),
-    '2nd_Stage_Brip_A_Current', CAST(`2nd_Stage_Brip_A_Current` AS DOUBLE),
-    '2nd_Stage_Brip_B_Current', CAST(`2nd_Stage_Brip_B_Current` AS DOUBLE),
-    'Atmospheric_Temperature_Dry', CAST(`Atmospheric_Temperature_Dry` AS DOUBLE),
-    'COOLING_TOWER_FAN_A_CURRENT', CAST(`COOLING_TOWER_FAN_A_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_B_CURRENT', CAST(`COOLING_TOWER_FAN_B_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_C_CURRENT', CAST(`COOLING_TOWER_FAN_C_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_D_CURRENT', CAST(`COOLING_TOWER_FAN_D_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_E_CURRENT', CAST(`COOLING_TOWER_FAN_E_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_F_CURRENT', CAST(`COOLING_TOWER_FAN_F_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_G_CURRENT', CAST(`COOLING_TOWER_FAN_G_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_H_CURRENT', CAST(`COOLING_TOWER_FAN_H_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_I_CURRENT', CAST(`COOLING_TOWER_FAN_I_CURRENT` AS DOUBLE),
-    'COOLING_TOWER_FAN_J_CURRENT', CAST(`COOLING_TOWER_FAN_J_CURRENT` AS DOUBLE),
-    'Condenser_Hotwell_Temperature', CAST(`Condenser_Hotwell_Temperature` AS DOUBLE),
-    'Condenser_Pressure_A', CAST(`Condenser_Pressure_A` AS DOUBLE),
-    'Condenser_Pressure_B', CAST(`Condenser_Pressure_B` AS DOUBLE),
-    'Condenser_Pressure_C', CAST(`Condenser_Pressure_C` AS DOUBLE),
-    'Condenser_Pressure_D', CAST(`Condenser_Pressure_D` AS DOUBLE),
-    'Cooling_Tower_Inlet_Condensate_Temperature', CAST(`Cooling_Tower_Inlet_Condensate_Temperature` AS DOUBLE),
-    'Cooling_Water_Flow', CAST(`Cooling_Water_Flow` AS DOUBLE),
-    'Generator_Cooling_Air_Temperature_Cold_Turbine_Side', CAST(`Generator_Cooling_Air_Temperature_Cold_Turbine_Side` AS DOUBLE),
-    'Gross_Generator_Output', CAST(`Gross_Generator_Output` AS DOUBLE),
-    'HP_BRINE_FLOW', CAST(`HP_BRINE_FLOW` AS DOUBLE),
-    'Hp_Seperator_Pressure_1', CAST(`Hp_Seperator_Pressure_1` AS DOUBLE),
-    'Hp_Steam_Flow_To_Turbine', CAST(`Hp_Steam_Flow_To_Turbine` AS DOUBLE),
-    'Humidity', CAST(`Humidity` AS DOUBLE),
-    'KA61_Prod_Well_Two_Phase_Flow', CAST(`KA61_Prod_Well_Two_Phase_Flow` AS DOUBLE),
-    'Kawerau_Total_Mw', CAST(`Kawerau_Total_Mw` AS DOUBLE),
-    'Kgl_To_Tp_Rtu_Mw_Net', CAST(`Kgl_To_Tp_Rtu_Mw_Net` AS DOUBLE),
-    'LP_STEAM_PRESSURE_2', CAST(`LP_STEAM_PRESSURE_2` AS DOUBLE),
-    'Lp_Seperator_Pressure_1', CAST(`Lp_Seperator_Pressure_1` AS DOUBLE),
-    'Lp_Steam_Flow_To_Turbine', CAST(`Lp_Steam_Flow_To_Turbine` AS DOUBLE),
-    'Main_Cooling_Water_Temperature', CAST(`Main_Cooling_Water_Temperature` AS DOUBLE),
-    'Net_Power', CAST(`Net_Power` AS DOUBLE),
-    'PARASITIC_LOAD', CAST(`PARASITIC_LOAD` AS DOUBLE),
-    'Station_Enthalpy', CAST(`Station_Enthalpy` AS DOUBLE),
-    'Stg_Cooling_Water_Supply_Pressure', CAST(`Stg_Cooling_Water_Supply_Pressure` AS DOUBLE),
-    'Total_Turbine_Steam_Flow', CAST(`Total_Turbine_Steam_Flow` AS DOUBLE),
-    'Turbine_Hp_Chamber_Pressure', CAST(`Turbine_Hp_Chamber_Pressure` AS DOUBLE),
-    'Turbine_Lp_Chamber_Pressure', CAST(`Turbine_Lp_Chamber_Pressure` AS DOUBLE),
-    'Vacuum_Pump_40_Current', CAST(`Vacuum_Pump_40_Current` AS DOUBLE),
-    'Vacuum_Pump_60_Current', CAST(`Vacuum_Pump_60_Current` AS DOUBLE),
-    'Vacuum_Pump_80_Current', CAST(`Vacuum_Pump_80_Current` AS DOUBLE)
-) tag_stack AS tag_name, tag_value
-WHERE Pi_Timestamp IS NOT NULL
-  AND tag_value IS NOT NULL;
-
-OPTIMIZE workspace.default.sample_incident_tag_values
-ZORDER BY (tag_name, Pi_Timestamp);
+-- Rebuild workspace.default.sample_incident_tag_values with
+-- notebooks/run_dba_agent_uc_functions.py before creating or using these functions.
+-- The notebook checks the actual sample_noisy schema and only expands columns that exist.
 
 CREATE OR REPLACE FUNCTION workspace.default.get_app_tag_catalog()
 RETURNS STRING

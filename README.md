@@ -71,9 +71,9 @@ GRANT CREATE TABLE ON SCHEMA workspace.default TO `<app-service-principal>`;
 The data incident demo can be connected to a Supervisor Agent that coordinates graph context,
 analysis, and read-only DBA evidence checks. `sql/dba_agent_uc_functions.sql` defines the Unity
 Catalog function tools for DBA evidence retrieval, and `notebooks/run_dba_agent_uc_functions.py`
-reruns that setup from a Databricks notebook. These assets build the long-form
-`workspace.default.sample_incident_tag_values` table from the monitored KAG tags and expose JSON
-evidence functions through the managed Unity Catalog function MCP server.
+rebuilds the long-form `workspace.default.sample_incident_tag_values` table from the monitored KAG
+tags that exist in the sample dataset. The function tools are exposed through the managed Unity
+Catalog function MCP server.
 
 ## Job Deployment
 
