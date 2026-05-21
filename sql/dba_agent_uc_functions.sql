@@ -10,9 +10,9 @@
 USE CATALOG workspace;
 USE SCHEMA default;
 
--- If an older view exists, remove it. The DBA functions should read the physical
--- Delta table below so MCP tool calls do not restack sample_noisy on every request.
-DROP VIEW IF EXISTS workspace.default.sample_incident_tag_values;
+-- The DBA functions should read the physical Delta table below so MCP tool calls
+-- do not restack sample_noisy on every request.
+DROP TABLE IF EXISTS workspace.default.sample_incident_tag_values;
 
 CREATE OR REPLACE TABLE workspace.default.sample_incident_tag_values
 USING DELTA

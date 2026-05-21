@@ -1,205 +1,120 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Deploy DBA Agent Unity Catalog Functions
+# MAGIC # Rebuild DBA Evidence Tag Table
 # MAGIC
-# MAGIC This notebook executes `sql/dba_agent_uc_functions.sql` from this repository.
-# MAGIC It rebuilds `workspace.default.sample_incident_tag_values`, optimizes it, and recreates
-# MAGIC the read-only JSON evidence functions consumed by `agent-incident-dba`.
+# MAGIC This notebook rebuilds `workspace.default.sample_incident_tag_values` from
+# MAGIC `workspace.default.sample_noisy` with the full KAG monitored tag set.
 # MAGIC
-# MAGIC Run this after `workspace.default.sample_noisy`, `workspace.default.sample_monitor_incident`,
-# MAGIC `workspace.default.sample_monitor_log`, and `workspace.default.monitor_incident_feedback`
-# MAGIC already exist.
+# MAGIC Run this when DBA evidence checks return empty results for tags that exist in
+# MAGIC `sample_noisy`, such as `2nd_Stage_Brip_A_Current`.
 
 # COMMAND ----------
 
-from pathlib import Path
-
-
-DEFAULT_SQL_RELATIVE_PATH = "sql/dba_agent_uc_functions.sql"
-
-
-def find_repo_root(start_path: Path) -> Path:
-    """
-    Find the repository root that contains the DBA SQL asset.
-
-    Args:
-        start_path: Directory to start searching from.
-
-    Returns:
-        Path: Repository root path.
-
-    Raises:
-        FileNotFoundError: If the SQL file cannot be found from start_path or parents.
-    """
-    for candidate in [start_path, *start_path.parents]:
-        sql_path = candidate / DEFAULT_SQL_RELATIVE_PATH
-        if sql_path.exists():
-            return candidate
-
-    raise FileNotFoundError(
-        f"Could not find {DEFAULT_SQL_RELATIVE_PATH} from {start_path}. "
-        "Set the sql_file_path widget to the full path of dba_agent_uc_functions.sql."
-    )
-
-
-def strip_sql_line_comments(sql_text: str) -> str:
-    """
-    Remove standalone SQL line comments before statement splitting.
-
-    Args:
-        sql_text: SQL script text.
-
-    Returns:
-        str: SQL text without standalone comment lines.
-    """
-    return "\n".join(line for line in sql_text.splitlines() if not line.lstrip().startswith("--"))
-
-
-def split_sql_statements(sql_text: str) -> list[str]:
-    """
-    Split SQL text into semicolon-terminated statements.
-
-    Args:
-        sql_text: SQL script text.
-
-    Returns:
-        list[str]: Individual SQL statements.
-    """
-    statements = []
-    buffer = []
-    in_single_quote = False
-    in_backtick = False
-    index = 0
-
-    while index < len(sql_text):
-        char = sql_text[index]
-        next_char = sql_text[index + 1] if index + 1 < len(sql_text) else ""
-
-        if char == "'" and not in_backtick:
-            buffer.append(char)
-            if in_single_quote and next_char == "'":
-                buffer.append(next_char)
-                index += 2
-                continue
-            in_single_quote = not in_single_quote
-            index += 1
-            continue
-
-        if char == "`" and not in_single_quote:
-            in_backtick = not in_backtick
-            buffer.append(char)
-            index += 1
-            continue
-
-        if char == ";" and not in_single_quote and not in_backtick:
-            statement = "".join(buffer).strip()
-            if statement:
-                statements.append(statement)
-            buffer = []
-            index += 1
-            continue
-
-        buffer.append(char)
-        index += 1
-
-    statement = "".join(buffer).strip()
-    if statement:
-        statements.append(statement)
-
-    return statements
-
+SOURCE_TABLE = "workspace.default.sample_noisy"
+TARGET_TABLE = "workspace.default.sample_incident_tag_values"
 
 # COMMAND ----------
 
-dbutils.widgets.text(
-    "sql_file_path",
-    "",
-    "Optional full path to sql/dba_agent_uc_functions.sql",
+spark.sql(f"DROP TABLE IF EXISTS {TARGET_TABLE}")
+
+spark.sql(f"""
+CREATE TABLE {TARGET_TABLE}
+USING DELTA
+AS
+SELECT
+    Pi_Timestamp,
+    tag_name,
+    CAST(tag_value AS DOUBLE) AS tag_value
+FROM {SOURCE_TABLE}
+LATERAL VIEW stack(45,
+    '1ST_BRIP_A_MOTOR_SPEED', CAST(`1ST_BRIP_A_MOTOR_SPEED` AS DOUBLE),
+    '1ST_BRIP_B_MOTOR_SPEED', CAST(`1ST_BRIP_B_MOTOR_SPEED` AS DOUBLE),
+    '2nd_Stage_Brip_A_Current', CAST(`2nd_Stage_Brip_A_Current` AS DOUBLE),
+    '2nd_Stage_Brip_B_Current', CAST(`2nd_Stage_Brip_B_Current` AS DOUBLE),
+    'Atmospheric_Temperature_Dry', CAST(`Atmospheric_Temperature_Dry` AS DOUBLE),
+    'COOLING_TOWER_FAN_A_CURRENT', CAST(`COOLING_TOWER_FAN_A_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_B_CURRENT', CAST(`COOLING_TOWER_FAN_B_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_C_CURRENT', CAST(`COOLING_TOWER_FAN_C_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_D_CURRENT', CAST(`COOLING_TOWER_FAN_D_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_E_CURRENT', CAST(`COOLING_TOWER_FAN_E_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_F_CURRENT', CAST(`COOLING_TOWER_FAN_F_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_G_CURRENT', CAST(`COOLING_TOWER_FAN_G_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_H_CURRENT', CAST(`COOLING_TOWER_FAN_H_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_I_CURRENT', CAST(`COOLING_TOWER_FAN_I_CURRENT` AS DOUBLE),
+    'COOLING_TOWER_FAN_J_CURRENT', CAST(`COOLING_TOWER_FAN_J_CURRENT` AS DOUBLE),
+    'Condenser_Hotwell_Temperature', CAST(`Condenser_Hotwell_Temperature` AS DOUBLE),
+    'Condenser_Pressure_A', CAST(`Condenser_Pressure_A` AS DOUBLE),
+    'Condenser_Pressure_B', CAST(`Condenser_Pressure_B` AS DOUBLE),
+    'Condenser_Pressure_C', CAST(`Condenser_Pressure_C` AS DOUBLE),
+    'Condenser_Pressure_D', CAST(`Condenser_Pressure_D` AS DOUBLE),
+    'Cooling_Tower_Inlet_Condensate_Temperature', CAST(`Cooling_Tower_Inlet_Condensate_Temperature` AS DOUBLE),
+    'Cooling_Water_Flow', CAST(`Cooling_Water_Flow` AS DOUBLE),
+    'Generator_Cooling_Air_Temperature_Cold_Turbine_Side', CAST(`Generator_Cooling_Air_Temperature_Cold_Turbine_Side` AS DOUBLE),
+    'Gross_Generator_Output', CAST(`Gross_Generator_Output` AS DOUBLE),
+    'HP_BRINE_FLOW', CAST(`HP_BRINE_FLOW` AS DOUBLE),
+    'Hp_Seperator_Pressure_1', CAST(`Hp_Seperator_Pressure_1` AS DOUBLE),
+    'Hp_Steam_Flow_To_Turbine', CAST(`Hp_Steam_Flow_To_Turbine` AS DOUBLE),
+    'Humidity', CAST(`Humidity` AS DOUBLE),
+    'KA61_Prod_Well_Two_Phase_Flow', CAST(`KA61_Prod_Well_Two_Phase_Flow` AS DOUBLE),
+    'Kawerau_Total_Mw', CAST(`Kawerau_Total_Mw` AS DOUBLE),
+    'Kgl_To_Tp_Rtu_Mw_Net', CAST(`Kgl_To_Tp_Rtu_Mw_Net` AS DOUBLE),
+    'LP_STEAM_PRESSURE_2', CAST(`LP_STEAM_PRESSURE_2` AS DOUBLE),
+    'Lp_Seperator_Pressure_1', CAST(`Lp_Seperator_Pressure_1` AS DOUBLE),
+    'Lp_Steam_Flow_To_Turbine', CAST(`Lp_Steam_Flow_To_Turbine` AS DOUBLE),
+    'Main_Cooling_Water_Temperature', CAST(`Main_Cooling_Water_Temperature` AS DOUBLE),
+    'Net_Power', CAST(`Net_Power` AS DOUBLE),
+    'PARASITIC_LOAD', CAST(`PARASITIC_LOAD` AS DOUBLE),
+    'Station_Enthalpy', CAST(`Station_Enthalpy` AS DOUBLE),
+    'Stg_Cooling_Water_Supply_Pressure', CAST(`Stg_Cooling_Water_Supply_Pressure` AS DOUBLE),
+    'Total_Turbine_Steam_Flow', CAST(`Total_Turbine_Steam_Flow` AS DOUBLE),
+    'Turbine_Hp_Chamber_Pressure', CAST(`Turbine_Hp_Chamber_Pressure` AS DOUBLE),
+    'Turbine_Lp_Chamber_Pressure', CAST(`Turbine_Lp_Chamber_Pressure` AS DOUBLE),
+    'Vacuum_Pump_40_Current', CAST(`Vacuum_Pump_40_Current` AS DOUBLE),
+    'Vacuum_Pump_60_Current', CAST(`Vacuum_Pump_60_Current` AS DOUBLE),
+    'Vacuum_Pump_80_Current', CAST(`Vacuum_Pump_80_Current` AS DOUBLE)
+) tag_stack AS tag_name, tag_value
+WHERE Pi_Timestamp IS NOT NULL
+  AND tag_value IS NOT NULL
+""")
+
+# COMMAND ----------
+
+spark.sql(f"OPTIMIZE {TARGET_TABLE} ZORDER BY (tag_name, Pi_Timestamp)")
+
+# COMMAND ----------
+
+display(
+    spark.sql(f"""
+        SELECT
+            COUNT(*) AS row_count,
+            COUNT(DISTINCT tag_name) AS tag_count,
+            MIN(Pi_Timestamp) AS min_ts,
+            MAX(Pi_Timestamp) AS max_ts
+        FROM {TARGET_TABLE}
+    """)
 )
-dbutils.widgets.dropdown("run_smoke_tests", "true", ["true", "false"], "Run smoke tests")
-
-sql_file_path_param = dbutils.widgets.get("sql_file_path").strip()
-run_smoke_tests = dbutils.widgets.get("run_smoke_tests").strip().lower() == "true"
-
-if sql_file_path_param:
-    sql_file_path = Path(sql_file_path_param)
-else:
-    repo_root = find_repo_root(Path.cwd())
-    sql_file_path = repo_root / DEFAULT_SQL_RELATIVE_PATH
-
-if not sql_file_path.exists():
-    raise FileNotFoundError(f"SQL file does not exist: {sql_file_path}")
-
-print(f"Using SQL file: {sql_file_path}")
 
 # COMMAND ----------
 
-sql_text = sql_file_path.read_text()
-statements = split_sql_statements(strip_sql_line_comments(sql_text))
-
-print(f"Executing {len(statements)} SQL statements")
-
-for statement_index, statement in enumerate(statements, start=1):
-    first_line = statement.splitlines()[0]
-    print(f"[{statement_index}/{len(statements)}] {first_line[:120]}")
-    spark.sql(statement)
-
-print("DBA agent UC SQL assets deployed.")
-
-# COMMAND ----------
-
-if run_smoke_tests:
-    display(
-        spark.sql("""
-            SELECT
-                COUNT(*) AS row_count,
-                COUNT(DISTINCT tag_name) AS tag_count,
-                MIN(Pi_Timestamp) AS min_ts,
-                MAX(Pi_Timestamp) AS max_ts
-            FROM workspace.default.sample_incident_tag_values
-        """)
-    )
+display(
+    spark.sql(f"""
+        SELECT
+            tag_name,
+            COUNT(*) AS row_count,
+            MIN(Pi_Timestamp) AS min_ts,
+            MAX(Pi_Timestamp) AS max_ts
+        FROM {TARGET_TABLE}
+        WHERE tag_name IN (
+            '2nd_Stage_Brip_A_Current',
+            '2nd_Stage_Brip_B_Current',
+            '1ST_BRIP_A_MOTOR_SPEED',
+            '1ST_BRIP_B_MOTOR_SPEED'
+        )
+        GROUP BY tag_name
+        ORDER BY tag_name
+    """)
+)
 
 # COMMAND ----------
 
-if run_smoke_tests:
-    display(
-        spark.sql("""
-            SELECT
-                tag_name,
-                COUNT(*) AS row_count,
-                MIN(Pi_Timestamp) AS min_ts,
-                MAX(Pi_Timestamp) AS max_ts
-            FROM workspace.default.sample_incident_tag_values
-            WHERE tag_name IN (
-                '2nd_Stage_Brip_A_Current',
-                '2nd_Stage_Brip_B_Current',
-                '1ST_BRIP_A_MOTOR_SPEED',
-                '1ST_BRIP_B_MOTOR_SPEED'
-            )
-            GROUP BY tag_name
-            ORDER BY tag_name
-        """)
-    )
-
-# COMMAND ----------
-
-if run_smoke_tests:
-    display(
-        spark.sql("""
-            SELECT workspace.default.get_app_tag_catalog() AS tag_catalog_json
-        """)
-    )
-
-# COMMAND ----------
-
-if run_smoke_tests:
-    display(
-        spark.sql("""
-            SELECT workspace.default.get_raw_points_sample(
-                array('2nd_Stage_Brip_A_Current'),
-                TIMESTAMP('2024-08-07 23:00:00'),
-                TIMESTAMP('2024-08-08 04:00:00')
-            ) AS raw_points_json
-        """)
-    )
+display(spark.sql(f"SELECT * FROM {TARGET_TABLE} LIMIT 10"))
