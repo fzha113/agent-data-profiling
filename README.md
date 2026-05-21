@@ -33,6 +33,8 @@ x + rand(seed) * 0.02 * x
 agent_data_profiling/       Streamlit app modules
 data_quality_monitoring/    Spark data quality rules and incident merge logic
 jobs/                       Databricks Spark Python task entrypoints
+notebooks/                  Databricks notebooks for sample data and demo setup
+sql/                        Unity Catalog SQL assets for the multi-agent demo
 config/settings.py          Central table and historical window configuration
 app.py                      Streamlit app entrypoint
 app.yaml                    Databricks App runtime configuration
@@ -64,44 +66,14 @@ GRANT MODIFY ON TABLE workspace.default.monitor_incident_feedback TO `<app-servi
 GRANT CREATE TABLE ON SCHEMA workspace.default TO `<app-service-principal>`;
 ```
 
-## DBA Agent UC Function Setup
+## Multi-Agent Demo Assets
 
-The Databricks data incident multi-agent demo uses DBA evidence tools exposed through the managed
-Unity Catalog function MCP server for `workspace.default`:
-
-```text
-/api/2.0/mcp/functions/workspace/default
-```
-
-Run `sql/dba_agent_uc_functions.sql` in the Databricks SQL Editor after `workspace.default.sample_noisy`,
-`workspace.default.sample_monitor_incident`, `workspace.default.sample_monitor_log`, and
-`workspace.default.monitor_incident_feedback` exist. The script creates the physical Delta table
-`workspace.default.sample_incident_tag_values`, optimizes it with `ZORDER BY (tag_name, Pi_Timestamp)`,
-and creates these read-only JSON evidence functions:
-
-```text
-workspace.default.get_app_tag_catalog()
-workspace.default.get_incident_packet(incident_id STRING)
-workspace.default.get_raw_points_sample(tag_names ARRAY<STRING>, start_ts TIMESTAMP, end_ts TIMESTAMP)
-workspace.default.get_related_tag_window_stats(tag_names ARRAY<STRING>, start_ts TIMESTAMP, end_ts TIMESTAMP)
-workspace.default.get_before_during_after_stats(tag_names ARRAY<STRING>, before_start_ts TIMESTAMP, incident_start_ts TIMESTAMP, incident_end_ts TIMESTAMP, after_end_ts TIMESTAMP)
-workspace.default.get_missingness_gap_profile(tag_names ARRAY<STRING>, start_ts TIMESTAMP, end_ts TIMESTAMP)
-workspace.default.get_outlier_threshold_context(tag_names ARRAY<STRING>, start_ts TIMESTAMP, end_ts TIMESTAMP, lower_threshold DOUBLE, upper_threshold DOUBLE)
-```
-
-Smoke test the slow path before testing the DBA agent:
-
-```sql
-SELECT workspace.default.get_raw_points_sample(
-  array('Condenser_Pressure_A'),
-  TIMESTAMP('2024-07-10 09:45:00'),
-  TIMESTAMP('2024-07-10 10:30:00')
-);
-```
-
-The DBA agent app service principal needs `SELECT` on the four source/evidence tables plus
-`EXECUTE` on each function above. In the Databricks app resources, add the functions with short
-resource keys matching the function names, for example `get_raw_points_sample`.
+The data incident demo can be connected to a Supervisor Agent that coordinates graph context,
+analysis, and read-only DBA evidence checks. `sql/dba_agent_uc_functions.sql` defines the Unity
+Catalog function tools for DBA evidence retrieval, and `notebooks/run_dba_agent_uc_functions.py`
+reruns that setup from a Databricks notebook. These assets build the long-form
+`workspace.default.sample_incident_tag_values` table from the monitored KAG tags and expose JSON
+evidence functions through the managed Unity Catalog function MCP server.
 
 ## Job Deployment
 
