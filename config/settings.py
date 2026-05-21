@@ -4,10 +4,10 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class HistoricalDataSettings:
     """
-    Static table settings for the standalone historical KAG dataset.
+    Static table settings for the standalone historical geothermal station dataset.
 
     Args:
-        source_table: Fully qualified real KAG source table.
+        source_table: Fully qualified real geothermal station source table.
         base_table: Fully qualified 2023 history table without noise.
         noisy_table: Fully qualified 2023 history table with numeric noise.
         quality_source_table: Fully qualified table used by data quality jobs.
@@ -22,9 +22,9 @@ class HistoricalDataSettings:
         noise_seed: Seed used for deterministic Databricks rand expressions.
     """
 
-    source_table: str = "workspace.default.geothermal_kag_streaming"
-    base_table: str = "workspace.default.kag_streaming_history_base"
-    noisy_table: str = "workspace.default.kag_streaming_history_noisy"
+    source_table: str = "workspace.default.geothermal_station_streaming"
+    base_table: str = "workspace.default.geothermal_streaming_history_base"
+    noisy_table: str = "workspace.default.geothermal_streaming_history_noisy"
     quality_source_table: str = "workspace.default.sample_noisy"
     monitor_quality_log_table: str = "workspace.default.sample_monitor_log"
     monitor_incident_table: str = "workspace.default.sample_monitor_incident"
@@ -32,7 +32,7 @@ class HistoricalDataSettings:
     history_start_ts: str = "2024-06-01 00:00:00"
     history_end_ts: str = "2024-10-01 00:00:00"
     timestamp_col: str = "Pi_Timestamp"
-    station: str = "KAG"
+    station: str = "geothermal station"
     noise_rate: float = 0.02
     noise_seed: int = 42
 

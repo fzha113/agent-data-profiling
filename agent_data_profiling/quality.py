@@ -118,7 +118,7 @@ def get_data_quality_config_from_env() -> DataQualityConfig:
             "MONITOR_INCIDENT_FEEDBACK_TABLE",
             "monitor_incident_feedback",
         ),
-        station=os.getenv("STATION", "KAG"),
+        station=os.getenv("STATION", "geothermal station"),
     )
 
 

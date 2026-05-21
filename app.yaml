@@ -23,7 +23,7 @@ env:
   - name: MONITOR_INCIDENT_FEEDBACK_TABLE
     value: monitor_incident_feedback
   - name: STATION
-    value: KAG
+    value: geothermal station
   - name: DATABRICKS_AI_GATEWAY_ENDPOINT
     value: agent-data-profiling
   - name: DATABRICKS_SUPERVISOR_AGENT_ENDPOINT

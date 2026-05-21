@@ -8,7 +8,7 @@ DEFAULT_TAGS: tuple[str, ...] = ()
 @dataclass(frozen=True)
 class TagMetadata:
     """
-    Metadata for a KAG raw PI tag exposed by the profiling app.
+    Metadata for a geothermal station raw PI tag exposed by the profiling app.
 
     Args:
         name: Raw table column name.

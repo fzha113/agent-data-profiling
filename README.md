@@ -1,6 +1,6 @@
 # Agent Data Profiling
 
-Standalone Databricks Streamlit app and data quality monitoring jobs for KAG historical PI tag profiling.
+Standalone Databricks Streamlit app and data quality monitoring jobs for geothermal station historical PI tag profiling.
 
 This repository does not use Databricks Asset Bundles. Runtime settings are centralized in
 `config/settings.py` and `app.yaml`.
@@ -16,8 +16,8 @@ repository also keeps historical base/noisy table helpers:
 | `workspace.default.sample_noisy` | Demo-safe sample table with 0-2% one-sided numeric noise. The app and data quality monitoring read this table. |
 | `workspace.default.sample_monitor_log` | Hourly outlier and stuck-value monitoring results for the sample table. |
 | `workspace.default.sample_monitor_incident` | Merged failed monitoring windows for the sample table. |
-| `workspace.default.kag_streaming_history_base` | 2023 source slice without noise, retained for historical table helpers. |
-| `workspace.default.kag_streaming_history_noisy` | 2023 source slice with one-sided 0-2% numeric noise, retained for historical table helpers. |
+| `workspace.default.geothermal_streaming_history_base` | 2023 source slice without noise, retained for historical table helpers. |
+| `workspace.default.geothermal_streaming_history_noisy` | 2023 source slice with one-sided 0-2% numeric noise, retained for historical table helpers. |
 
 The noisy table uses:
 
@@ -46,7 +46,7 @@ databricks_job.example.json Example Databricks Jobs API payload
 Create or grant access to these Unity Catalog objects in the target workspace. This version assumes all source and generated tables live under `workspace.default`:
 
 ```sql
-GRANT SELECT ON TABLE workspace.default.geothermal_kag_streaming TO `<job-runner>`;
+GRANT SELECT ON TABLE workspace.default.geothermal_station_streaming TO `<job-runner>`;
 GRANT SELECT ON TABLE workspace.default.sample_original TO `<job-runner>`;
 GRANT SELECT ON TABLE workspace.default.sample_noisy TO `<job-runner>`;
 GRANT USE CATALOG ON CATALOG workspace TO `<job-runner>`;
@@ -71,7 +71,7 @@ GRANT CREATE TABLE ON SCHEMA workspace.default TO `<app-service-principal>`;
 The data incident demo can be connected to a Supervisor Agent that coordinates graph context,
 analysis, and read-only DBA evidence checks. `sql/dba_agent_uc_functions.sql` defines the Unity
 Catalog function tools for DBA evidence retrieval, and `notebooks/run_dba_agent_uc_functions.py`
-rebuilds the long-form `workspace.default.sample_incident_tag_values` table from the monitored KAG
+rebuilds the long-form `workspace.default.sample_incident_tag_values` table from the monitored geothermal station
 tags that exist in the sample dataset. The function tools are exposed through the managed Unity
 Catalog function MCP server.
 
@@ -96,8 +96,8 @@ current clock.
 `jobs/run_freshness_check.py` remains available for live or replayed data sources, but it is not
 part of this sample historical workflow.
 
-To load sample JSON files from `/Volumes/workspace/default/history_kag_sample/sample data/` into
-`workspace.default.sample_original`, run `jobs/kag_stream_station_data.py`. It reads `*.json`
+To load sample JSON files from `/Volumes/workspace/default/history_geothermal_sample/sample data/` into
+`workspace.default.sample_original`, run `jobs/geothermal_stream_station_data.py`. It reads `*.json`
 recursively, applies the same field renaming as the Kinesis ingestion notebook, and writes with
 `overwrite` mode by default.
 

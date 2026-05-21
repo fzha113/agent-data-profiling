@@ -371,8 +371,8 @@ def render_sidebar_header() -> None:
     Returns:
         None.
     """
-    st.sidebar.header("KAG tag profiling")
-    st.sidebar.caption("Station: KAG")
+    st.sidebar.header("Geothermal station tag profiling")
+    st.sidebar.caption("Station: Geothermal station")
 
 
 def render_profiling_sidebar() -> tuple[list[str], datetime, datetime, bool]:
@@ -2465,7 +2465,7 @@ def render_quality_incidents_section(refresh_incidents: bool = False) -> None:
     """
     st.subheader("Data quality incidents")
     st.caption(
-        f"Failed KAG monitor incidents updated in the last {QUALITY_INCIDENT_LOOKBACK_DAYS} days. "
+        f"Failed geothermal station monitor incidents updated in the last {QUALITY_INCIDENT_LOOKBACK_DAYS} days. "
         f"The monitoring job runs every {QUALITY_MONITOR_REFRESH_MINUTES} minutes."
     )
 
@@ -2515,7 +2515,7 @@ def render_station_sensor_graph_section(
 
 def main() -> None:
     """
-    Run the KAG agent data profiling Streamlit app.
+    Run the geothermal station agent data profiling Streamlit app.
 
     Args:
         None.
@@ -2523,8 +2523,8 @@ def main() -> None:
     Returns:
         None.
     """
-    st.set_page_config(page_title="KAG Agent Data Profiling", layout="wide")
-    st.title("KAG Agent Data Profiling")
+    st.set_page_config(page_title="Geothermal Station Agent Data Profiling", layout="wide")
+    st.title("Geothermal Station Agent Data Profiling")
     selected_section = render_section_navigation()
 
     if selected_section == QUALITY_INCIDENTS_SECTION:

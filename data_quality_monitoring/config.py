@@ -1,5 +1,5 @@
 RULE_CONFIG = {
-    "KAG": {
+    "geothermal station": {
         "freshness_lag": {
             "max_lag_minutes": 30,
             "timestamp_col": "Pi_Timestamp",

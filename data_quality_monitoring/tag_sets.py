@@ -1,5 +1,5 @@
 RULE_TAGS = {
-    "KAG": {
+    "geothermal station": {
         "stuck_value": [
             "Hp_Seperator_Pressure_1",
             "Hp_Steam_Flow_To_Turbine",

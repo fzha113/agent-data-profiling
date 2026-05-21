@@ -79,10 +79,10 @@ class SupervisorAgentConfig:
 @dataclass(frozen=True)
 class LlmPromptConfig:
     """
-    Prompt templates for KAG AI analysis.
+    Prompt templates for geothermal station AI analysis.
 
     Args:
-        station_context: Shared KAG station process context.
+        station_context: Shared geothermal station process context.
         tag_profile_system: System prompt template for tag profiling analysis.
         tag_profile_user: User prompt template for tag profiling analysis.
         incident_system: System prompt template for incident analysis.

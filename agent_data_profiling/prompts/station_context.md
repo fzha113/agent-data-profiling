@@ -1,10 +1,10 @@
-# KAG Station Process Context
+# Geothermal Station Process Context
 
-This context is for KAG PI streaming data profiling and data quality incident analysis. Use it to interpret supplied tag statistics and incident windows. Do not treat this context as evidence that an event happened in the analysed time window. The supplied JSON data remains the evidence source.
+This context is for geothermal station PI streaming data profiling and data quality incident analysis. Use it to interpret supplied tag statistics and incident windows. Do not treat this context as evidence that an event happened in the analysed time window. The supplied JSON data remains the evidence source.
 
 ## Station Objective
 
-KAG is a geothermal station. Two-phase geothermal fluid from production wells is separated into steam and brine. Steam is sent through HP and LP turbine stages to generate gross MW. Parasitic load is then subtracted to produce net power. Brine and condensate are reinjected.
+This is a representative geothermal station. Two-phase geothermal fluid from production wells is separated into steam and brine. Steam is sent through HP and LP turbine stages to generate gross MW. Parasitic load is then subtracted to produce net power. Brine and condensate are reinjected.
 
 The station model and downstream dashboards use PI streaming data to estimate gross output, net output, two-phase flow, steam flows, condenser behaviour, GES behaviour, parasitic load, and forecast/optimisation outputs. Bad PI data can affect feature engineering, station modelling, forecasting, Power BI dashboards, set point optimisation, and drift monitoring.
 
@@ -37,7 +37,7 @@ Use these as process context only; use incident thresholds from supplied JSON wh
 
 ## Feature Calculations
 
-These calculations are used in KAG station model, steam flow calibration, or cross-validation work. Use them to suggest related checks, not to invent missing values.
+These calculations are used in the station model, steam flow calibration, or cross-validation work. Use them to suggest related checks, not to invent missing values.
 
 - `HP_TURBINE_STEAM_FLOW = HP_STEAM_FLOW_ALL - HP_GES_STEAM_SUPPLY`
 - `HP_turbine_steam_flow_calculated = C_stodola_coef_hp * sqrt(p_in_bara^2 - p_out_bara^2)`

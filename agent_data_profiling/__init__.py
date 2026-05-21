@@ -1,1 +1,1 @@
-"""KAG agent data profiling app helpers."""
+"""Geothermal station agent data profiling app helpers."""

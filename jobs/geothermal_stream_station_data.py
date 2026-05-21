@@ -1,12 +1,12 @@
 import importlib
 
 
-DEFAULT_SAMPLE_JSON_VOLUME_DIR = "/Volumes/workspace/default/history_kag_sample/sample data/"
+DEFAULT_SAMPLE_JSON_VOLUME_DIR = "/Volumes/workspace/default/history_geothermal_sample/sample data/"
 DEFAULT_SAMPLE_ORIGINAL_TABLE = "workspace.default.sample_original"
 SUPPORTED_WRITE_MODES = {"append", "overwrite"}
 PI_TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSSSSSXXX"
 
-KAG_MEASUREMENT_COLUMN_MAPPINGS = (
+GEOTHERMAL_MEASUREMENT_COLUMN_MAPPINGS = (
     ("Lp Steam Pressure Set Point", "Lp_Steam_Pressure_Set_Point"),
     ("Kgl To Tp Rtu Mw Net", "Kgl_To_Tp_Rtu_Mw_Net"),
     ("1st Brip A Motor Speed", "1st_Brip_A_Motor_Speed"),
@@ -129,7 +129,7 @@ def apply_kinesis_field_mapping(sample_df):
 
     measurement_columns = [
         _optional_column(sample_df, (source_name, target_name), "double").alias(target_name)
-        for source_name, target_name in KAG_MEASUREMENT_COLUMN_MAPPINGS
+        for source_name, target_name in GEOTHERMAL_MEASUREMENT_COLUMN_MAPPINGS
     ]
     projected_df = sample_df.select(
         *measurement_columns,

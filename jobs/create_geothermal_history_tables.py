@@ -143,7 +143,7 @@ def get_base_table_columns(spark, settings: HistoricalDataSettings) -> list[Colu
 
 def create_history_tables(spark, settings: HistoricalDataSettings = DEFAULT_SETTINGS) -> None:
     """
-    Create the base and noisy KAG historical tables.
+    Create the base and noisy geothermal station historical tables.
 
     Args:
         spark: Active Spark session.

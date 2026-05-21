@@ -15,7 +15,7 @@ MAX_LOOKBACK_DAYS = 90
 @dataclass(frozen=True)
 class QueryConfig:
     """
-    Runtime configuration for querying the KAG raw PI table.
+    Runtime configuration for querying the geothermal station raw PI table.
 
     Args:
         stream_catalog_raw: Raw stream catalog for the active bundle target.
@@ -49,7 +49,7 @@ def quote_identifier(identifier: str) -> str:
 
 def get_source_table_name(config: QueryConfig) -> str:
     """
-    Build the fully qualified KAG source table name.
+    Build the fully qualified geothermal station source table name.
 
     Args:
         config: Query runtime configuration.
@@ -154,7 +154,7 @@ def get_query_config_from_env() -> QueryConfig:
     """
     stream_catalog_raw = os.getenv("STREAM_CATALOG_RAW")
     source_schema = os.getenv("SOURCE_SCHEMA", "pi")
-    source_table = os.getenv("SOURCE_TABLE", "geothermal_kag_streaming")
+    source_table = os.getenv("SOURCE_TABLE", "geothermal_station_streaming")
 
     if not stream_catalog_raw:
         raise RuntimeError("STREAM_CATALOG_RAW is not configured.")
