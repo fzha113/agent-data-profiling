@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -25,6 +26,14 @@ DEFAULT_TIMEOUT_SECONDS = 60
 DEFAULT_SUPERVISOR_TIMEOUT_SECONDS = 180
 MAX_DISTRIBUTION_BINS = 5
 MAX_QUALITY_LOG_ROWS = 12
+APPROVED_SUPERVISOR_TOOL_NAMES = frozenset(
+    {
+        "app-agent-graph-assistant",
+        "agent-incident-analysis",
+        "agent-incident-dba",
+    }
+)
+MAX_SUPERVISOR_APPROVAL_ROUNDS = 8
 
 
 @dataclass(frozen=True)
@@ -286,6 +295,8 @@ def query_ai_gateway(
 def query_supervisor_agent(
     config: SupervisorAgentConfig,
     prompt: str,
+    conversation_id_provider=lambda: str(uuid.uuid4()),
+    user_id: str | None = None,
     access_token_provider=get_databricks_oauth_token,
     post=requests.post,
 ) -> str:
@@ -295,6 +306,8 @@ def query_supervisor_agent(
     Args:
         config: Supervisor Agent endpoint configuration.
         prompt: User prompt sent to the Supervisor Agent.
+        conversation_id_provider: Callable that returns a Databricks conversation id.
+        user_id: Optional Databricks user id for request context.
         access_token_provider: Callable that returns a bearer token.
         post: HTTP POST callable, injected in tests.
 
@@ -309,23 +322,30 @@ def query_supervisor_agent(
         "Authorization": f"Bearer {access_token_provider()}",
         "Content-Type": "application/json",
     }
-    request_body = {
-        "input": [{"role": "user", "content": prompt}],
-    }
+    conversation_id = conversation_id_provider()
+    input_items = [{"role": "user", "content": prompt}]
 
-    response = post(
-        config.responses_url,
-        headers=headers,
-        json=request_body,
-        timeout=config.timeout_seconds,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    content = _extract_responses_output_text(payload)
+    for _ in range(MAX_SUPERVISOR_APPROVAL_ROUNDS):
+        response = post(
+            config.responses_url,
+            headers=headers,
+            json=_build_supervisor_request_body(input_items, conversation_id, user_id),
+            timeout=config.timeout_seconds,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        approval_requests = _extract_mcp_approval_requests(payload)
 
-    if not content:
-        raise ValueError(_build_empty_responses_content_error_message(payload))
-    return str(content)
+        if not approval_requests:
+            content = _extract_responses_output_text(payload)
+            if not content:
+                raise ValueError(_build_empty_responses_content_error_message(payload))
+            return str(content)
+
+        input_items.extend(_normalise_responses_output(payload))
+        input_items.extend(_build_mcp_approval_responses(approval_requests))
+
+    raise RuntimeError("Supervisor Agent exceeded automatic tool approval rounds.")
 
 
 def build_tag_profile_llm_context(
@@ -606,6 +626,27 @@ def _extract_message_content(content) -> str:
     return str(content)
 
 
+def _build_supervisor_request_body(
+    input_items: list[dict],
+    conversation_id: str,
+    user_id: str | None,
+) -> dict:
+    request_body = {
+        "input": input_items,
+        "databricks_options": {
+            "conversation_id": conversation_id,
+            "return_trace": True,
+            "long_task": True,
+        },
+        "context": {
+            "conversation_id": conversation_id,
+        },
+    }
+    if user_id:
+        request_body["context"]["user_id"] = user_id
+    return request_body
+
+
 def _extract_responses_output_text(payload: dict) -> str:
     output_text = payload.get("output_text")
     if isinstance(output_text, str):
@@ -635,6 +676,50 @@ def _extract_responses_output_text(payload: dict) -> str:
         return _extract_message_content(choice["message"]["content"])
     except (KeyError, IndexError, TypeError):
         return ""
+
+
+def _normalise_responses_output(payload: dict) -> list[dict]:
+    output = payload.get("output", [])
+    if not isinstance(output, list):
+        return []
+    return [item for item in output if isinstance(item, dict)]
+
+
+def _extract_mcp_approval_requests(payload: dict) -> list[dict]:
+    approval_requests = []
+    for item in _normalise_responses_output(payload):
+        if item.get("type") != "mcp_approval_request":
+            continue
+        tool_name = item.get("name")
+        server_label = item.get("server_label")
+        if tool_name not in APPROVED_SUPERVISOR_TOOL_NAMES and server_label not in (
+            APPROVED_SUPERVISOR_TOOL_NAMES
+        ):
+            raise RuntimeError(
+                "Supervisor Agent requested approval for an unapproved tool: "
+                f"name={tool_name}, server_label={server_label}"
+            )
+        approval_requests.append(item)
+    return approval_requests
+
+
+def _build_mcp_approval_responses(approval_requests: list[dict]) -> list[dict]:
+    approval_responses = []
+    for approval_request in approval_requests:
+        approval_request_id = approval_request.get("approval_request_id") or approval_request.get(
+            "id"
+        )
+        if not approval_request_id:
+            raise RuntimeError("Supervisor Agent approval request did not include an id.")
+        approval_responses.append(
+            {
+                "type": "mcp_approval_response",
+                "id": approval_request_id,
+                "approval_request_id": approval_request_id,
+                "approve": True,
+            }
+        )
+    return approval_responses
 
 
 def _json_dumps(value) -> str:
