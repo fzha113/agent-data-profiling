@@ -1,11 +1,13 @@
 import importlib
 import json
 from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 
 from agent_data_profiling.comparison import (
     build_comparison_frame,
@@ -60,12 +62,15 @@ PI_TIMESTAMP_DISPLAY_COLUMN = "Pi_Timestamp_NZT"
 QUALITY_INCIDENTS_SECTION = "Data quality incidents"
 TAG_PROFILING_SECTION = "Tag profiling"
 COMPARE_TAGS_SECTION = "Compare tags"
+STATION_SENSOR_GRAPH_SECTION = "Station sensor graph"
 APP_SECTIONS = (
     QUALITY_INCIDENTS_SECTION,
     TAG_PROFILING_SECTION,
     COMPARE_TAGS_SECTION,
+    STATION_SENSOR_GRAPH_SECTION,
 )
 DEFAULT_SECTION = QUALITY_INCIDENTS_SECTION
+STATION_SENSOR_GRAPH_HTML_PATH = Path(__file__).resolve().parent / "graph_3d.html"
 QUALITY_RESULT_STATE_KEY = "quality_incident_result"
 QUALITY_CONTEXT_RESULT_STATE_KEY = "quality_incident_context_results"
 QUALITY_GRID_VERSION_STATE_KEY = "quality_incident_grid_version"
@@ -2486,6 +2491,28 @@ def render_quality_incidents_section(refresh_incidents: bool = False) -> None:
     render_quality_incident_result(stored_result)
 
 
+def render_station_sensor_graph_section(
+    html_path: Path | str = STATION_SENSOR_GRAPH_HTML_PATH,
+) -> None:
+    """
+    Render the prebuilt 3D Graphify station sensor graph.
+
+    Args:
+        html_path: Local path to the HTML artifact.
+
+    Returns:
+        None.
+    """
+    st.subheader("Station sensor graph")
+    graph_html_path = Path(html_path)
+    if not graph_html_path.exists():
+        st.warning(f"Graph file not found: {graph_html_path}")
+        return
+
+    graph_html = graph_html_path.read_text(encoding="utf-8")
+    components.html(graph_html, height=820, scrolling=True)
+
+
 def main() -> None:
     """
     Run the KAG agent data profiling Streamlit app.
@@ -2508,6 +2535,10 @@ def main() -> None:
     if selected_section == TAG_PROFILING_SECTION:
         selected_tags, start_time, end_time, run_query = render_profiling_sidebar()
         render_profiling_section(selected_tags, start_time, end_time, run_query)
+        return
+
+    if selected_section == STATION_SENSOR_GRAPH_SECTION:
+        render_station_sensor_graph_section()
         return
 
     (
