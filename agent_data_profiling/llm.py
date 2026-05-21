@@ -16,11 +16,13 @@ from agent_data_profiling.tag_catalog import TAG_CATALOG
 DISPLAY_TIMEZONE = ZoneInfo("Pacific/Auckland")
 AI_GATEWAY_PATH = "/ai-gateway/mlflow/v1"
 CHAT_COMPLETIONS_PATH = "/chat/completions"
+RESPONSES_ENDPOINT_PATH = "/serving-endpoints/responses"
 PROMPT_DIR_ENV_VAR = "AGENT_DATA_PROFILING_LLM_PROMPT_DIR"
 DEFAULT_PROMPT_DIR = Path(__file__).with_name("prompts")
 DEFAULT_MAX_TOKENS = 2048
 DEFAULT_REASONING_EFFORT = "none"
 DEFAULT_TIMEOUT_SECONDS = 60
+DEFAULT_SUPERVISOR_TIMEOUT_SECONDS = 180
 MAX_DISTRIBUTION_BINS = 5
 MAX_QUALITY_LOG_ROWS = 12
 
@@ -45,6 +47,22 @@ class AiGatewayConfig:
     temperature: float | None = None
     reasoning_effort: str | None = DEFAULT_REASONING_EFFORT
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
+
+
+@dataclass(frozen=True)
+class SupervisorAgentConfig:
+    """
+    Runtime configuration for querying a Databricks Supervisor Agent endpoint.
+
+    Args:
+        endpoint_name: Databricks Agent endpoint name.
+        responses_url: Workspace Responses API URL for serving endpoints.
+        timeout_seconds: HTTP request timeout in seconds.
+    """
+
+    endpoint_name: str
+    responses_url: str
+    timeout_seconds: int = DEFAULT_SUPERVISOR_TIMEOUT_SECONDS
 
 
 @dataclass(frozen=True)
@@ -102,6 +120,41 @@ def get_ai_gateway_config_from_env() -> AiGatewayConfig:
         endpoint_name=endpoint_name,
         base_url=base_url,
         reasoning_effort=reasoning_effort or None,
+    )
+
+
+def get_supervisor_agent_config_from_env() -> SupervisorAgentConfig:
+    """
+    Read Databricks Supervisor Agent endpoint settings from app environment variables.
+
+    Args:
+        None.
+
+    Returns:
+        SupervisorAgentConfig: Runtime Supervisor Agent endpoint configuration.
+
+    Raises:
+        RuntimeError: If the endpoint name or workspace host is missing.
+    """
+    endpoint_name = os.getenv("DATABRICKS_SUPERVISOR_AGENT_ENDPOINT")
+    if not endpoint_name:
+        raise RuntimeError("DATABRICKS_SUPERVISOR_AGENT_ENDPOINT is not configured.")
+
+    host = os.getenv("DATABRICKS_HOST")
+    if not host:
+        raise RuntimeError("DATABRICKS_HOST is not configured.")
+
+    timeout_seconds = int(
+        os.getenv(
+            "DATABRICKS_SUPERVISOR_AGENT_TIMEOUT_SECONDS",
+            str(DEFAULT_SUPERVISOR_TIMEOUT_SECONDS),
+        )
+    )
+
+    return SupervisorAgentConfig(
+        endpoint_name=endpoint_name,
+        responses_url=f"{_normalise_workspace_host(host)}{RESPONSES_ENDPOINT_PATH}",
+        timeout_seconds=timeout_seconds,
     )
 
 
@@ -225,6 +278,52 @@ def query_ai_gateway(
 
     if not content:
         raise ValueError(_build_empty_content_error_message(payload))
+    return str(content)
+
+
+def query_supervisor_agent(
+    config: SupervisorAgentConfig,
+    prompt: str,
+    access_token_provider=get_databricks_oauth_token,
+    post=requests.post,
+) -> str:
+    """
+    Query a Databricks Supervisor Agent through the serving endpoints Responses API.
+
+    Args:
+        config: Supervisor Agent endpoint configuration.
+        prompt: User prompt sent to the Supervisor Agent.
+        access_token_provider: Callable that returns a bearer token.
+        post: HTTP POST callable, injected in tests.
+
+    Returns:
+        str: Final assistant output text.
+
+    Raises:
+        ValueError: If the response does not contain assistant text.
+        requests.HTTPError: If the endpoint returns a non-success HTTP status.
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token_provider()}",
+        "Content-Type": "application/json",
+    }
+    request_body = {
+        "model": config.endpoint_name,
+        "input": [{"role": "user", "content": prompt}],
+    }
+
+    response = post(
+        config.responses_url,
+        headers=headers,
+        json=request_body,
+        timeout=config.timeout_seconds,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    content = _extract_responses_output_text(payload)
+
+    if not content:
+        raise ValueError(_build_empty_responses_content_error_message(payload))
     return str(content)
 
 
@@ -409,6 +508,34 @@ def build_incident_llm_messages(context: dict) -> list[dict[str, str]]:
     ]
 
 
+def build_supervisor_incident_prompt(
+    context: dict, available_tags: list[str] | tuple[str, ...]
+) -> str:
+    """
+    Build a Supervisor Agent prompt for a data quality incident from app context.
+
+    Args:
+        context: Incident context from `build_incident_llm_context`.
+        available_tags: Source-table tag columns that actually exist.
+
+    Returns:
+        str: Prompt sent to the Supervisor Agent.
+    """
+    incident_packet = dict(context)
+    incident_packet["available_tags"] = list(available_tags)
+    context_json = _json_dumps(incident_packet)
+    incident = context.get("incident", {})
+    tag_name = incident.get("tag_name", "unknown tag")
+    rule_type = incident.get("rule_type", "data quality")
+    incident_start = incident.get("incident_start_nzt", "unknown start time")
+    incident_end = incident.get("incident_end_nzt", "unknown end time")
+
+    return (
+        f"Investigate why tag {tag_name} triggered an {rule_type} incident from "
+        f"{incident_start} to {incident_end}.\n"
+    )
+
+
 def _get_prompt_dir(prompt_dir: str | Path | None) -> Path:
     if prompt_dir:
         return Path(prompt_dir)
@@ -468,6 +595,37 @@ def _extract_message_content(content) -> str:
     return str(content)
 
 
+def _extract_responses_output_text(payload: dict) -> str:
+    output_text = payload.get("output_text")
+    if isinstance(output_text, str):
+        return output_text
+
+    text_parts = []
+    for item in payload.get("output", []):
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        if isinstance(content, str):
+            text_parts.append(content)
+            continue
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") in {"output_text", "text"} and part.get("text"):
+                text_parts.append(str(part["text"]))
+
+    if text_parts:
+        return "\n".join(text_parts)
+
+    try:
+        choice = payload["choices"][0]
+        return _extract_message_content(choice["message"]["content"])
+    except (KeyError, IndexError, TypeError):
+        return ""
+
+
 def _json_dumps(value) -> str:
     return json.dumps(value, default=_json_default, sort_keys=True)
 
@@ -488,6 +646,15 @@ def _build_empty_content_error_message(payload: dict) -> str:
     return (
         "AI Gateway response content was empty. "
         f"finish_reason={choice.get('finish_reason')}; "
+        f"usage={json.dumps(usage, sort_keys=True) if usage else None}"
+    )
+
+
+def _build_empty_responses_content_error_message(payload: dict) -> str:
+    usage = payload.get("usage")
+    return (
+        "Supervisor Agent response content was empty. "
+        f"status={payload.get('status')}; "
         f"usage={json.dumps(usage, sort_keys=True) if usage else None}"
     )
 

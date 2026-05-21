@@ -15,11 +15,13 @@ from agent_data_profiling.comparison import (
 )
 from agent_data_profiling.llm import (
     build_incident_llm_context,
-    build_incident_llm_messages,
+    build_supervisor_incident_prompt,
     build_tag_profile_llm_context,
     build_tag_profile_llm_messages,
     get_ai_gateway_config_from_env,
+    get_supervisor_agent_config_from_env,
     query_ai_gateway,
+    query_supervisor_agent,
 )
 from agent_data_profiling.profiling import (
     BASELINE_LOOKBACK_DAYS,
@@ -38,6 +40,7 @@ from agent_data_profiling.quality import (
 )
 from agent_data_profiling.queries import (
     MAX_LOOKBACK_DAYS,
+    fetch_source_table_columns,
     fetch_tag_history,
     get_query_config_from_env,
 )
@@ -960,6 +963,84 @@ def load_llm_analysis_for_ui(
             return query_ai_gateway(config, messages, request_tags=request_tags)
     except Exception as exc:
         st.error(error_message)
+        with st.expander("Technical detail"):
+            st.exception(exc)
+        return None
+
+
+def build_supervisor_available_tags(
+    source_columns: list[str] | tuple[str, ...],
+    incident_tag: str,
+) -> list[str]:
+    """
+    Build the Supervisor available_tags list from real source table columns.
+
+    Args:
+        source_columns: Source table columns returned by Databricks SQL.
+        incident_tag: Current incident tag name.
+
+    Returns:
+        list[str]: Existing tag columns to pass to the Supervisor Agent.
+    """
+    catalog_tag_names = {tag.lower() for tag in get_catalog_tags()}
+    available_tags = [
+        column
+        for column in source_columns
+        if column.lower() in catalog_tag_names and column != "Pi_Timestamp"
+    ]
+
+    source_column_lookup = {column.lower(): column for column in source_columns}
+    incident_source_tag = source_column_lookup.get(incident_tag.lower())
+    if incident_source_tag and incident_source_tag not in available_tags:
+        available_tags.append(incident_source_tag)
+
+    return available_tags
+
+
+def load_supervisor_available_tags_for_ui(incident_tag: str) -> list[str]:
+    """
+    Load real source-table tags for the Supervisor Agent, with a conservative fallback.
+
+    Args:
+        incident_tag: Current incident tag name.
+
+    Returns:
+        list[str]: Existing source tags for downstream agent validation.
+    """
+    try:
+        raw_config = get_query_config_from_env()
+        source_columns = fetch_source_table_columns(raw_config)
+    except Exception as exc:
+        st.warning("Could not load source table schema; passing only the incident tag to AI.")
+        with st.expander("Technical detail"):
+            st.exception(exc)
+        return [incident_tag]
+
+    available_tags = build_supervisor_available_tags(source_columns, incident_tag)
+    return available_tags or [incident_tag]
+
+
+def load_supervisor_incident_analysis_for_ui(
+    context: dict,
+    available_tags: list[str],
+) -> str | None:
+    """
+    Query the Databricks Supervisor Agent and render Streamlit error details on failure.
+
+    Args:
+        context: Incident context from `build_incident_llm_context`.
+        available_tags: Existing source-table tag columns.
+
+    Returns:
+        str | None: Supervisor final answer, or None if loading failed.
+    """
+    try:
+        config = get_supervisor_agent_config_from_env()
+        prompt = build_supervisor_incident_prompt(context, available_tags)
+        with st.spinner("Running Supervisor Agent incident investigation..."):
+            return query_supervisor_agent(config, prompt)
+    except Exception as exc:
+        st.error("Failed to generate Supervisor Agent incident analysis.")
         with st.expander("Technical detail"):
             st.exception(exc)
         return None
@@ -2145,6 +2226,7 @@ def render_incident_ai_analysis(
         key=f"ai_incident_{incident_id}",
         type="secondary",
     ):
+        available_tags = load_supervisor_available_tags_for_ui(tag)
         context = build_incident_llm_context(
             incident_id,
             incident_rows,
@@ -2154,11 +2236,9 @@ def render_incident_ai_analysis(
             incident_end,
             outlier_thresholds,
         )
-        analysis = load_llm_analysis_for_ui(
-            messages=build_incident_llm_messages(context),
-            request_tags={"feature": "data_quality_incident", "incident_id": incident_id},
-            spinner_message="Generating AI incident analysis...",
-            error_message="Failed to generate AI incident analysis.",
+        analysis = load_supervisor_incident_analysis_for_ui(
+            context=context,
+            available_tags=available_tags,
         )
         if analysis is not None:
             analyses[incident_id] = analysis

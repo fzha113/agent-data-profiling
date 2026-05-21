@@ -126,6 +126,19 @@ def build_tag_history_query(
     return sql, [start_time, end_time]
 
 
+def build_source_columns_query(config: QueryConfig) -> str:
+    """
+    Build a source-table schema query.
+
+    Args:
+        config: Query runtime configuration.
+
+    Returns:
+        str: SQL text for describing the configured source table.
+    """
+    return f"DESCRIBE TABLE {get_source_table_name(config)}"
+
+
 def get_query_config_from_env() -> QueryConfig:
     """
     Read query configuration from Databricks App environment variables.
@@ -215,3 +228,37 @@ def fetch_tag_history(
     ):
         cursor.execute(query, parameters)
         return cursor.fetchall_arrow().to_pandas()
+
+
+def fetch_source_table_columns(config: QueryConfig) -> tuple[str, ...]:
+    """
+    Fetch source table column names from Databricks SQL.
+
+    Args:
+        config: Query runtime configuration.
+
+    Returns:
+        tuple[str, ...]: Source table column names in table order.
+    """
+    query = build_source_columns_query(config)
+    sql = importlib.import_module("databricks.sql")
+
+    with (
+        sql.connect(
+            server_hostname=_get_server_hostname(),
+            http_path=_get_http_path(),
+            credentials_provider=_credential_provider,
+            user_agent_entry="agent_data_profiling_app",
+        ) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+    columns = []
+    for row in rows:
+        column_name = row[0] if row else None
+        if not column_name or str(column_name).startswith("#"):
+            continue
+        columns.append(str(column_name))
+    return tuple(columns)

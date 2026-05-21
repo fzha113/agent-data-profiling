@@ -26,3 +26,5 @@ env:
     value: KAG
   - name: DATABRICKS_AI_GATEWAY_ENDPOINT
     value: agent-data-profiling
+  - name: DATABRICKS_SUPERVISOR_AGENT_ENDPOINT
+    value: data-incident-supervisor
