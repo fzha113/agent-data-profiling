@@ -31,6 +31,7 @@ class DataQualityConfig:
         quality_log_table: Detailed quality log table name.
         feedback_table: Human feedback table name.
         station: Station identifier to display.
+        source_table: Monitored source table used to filter incident rows.
     """
 
     monitor_catalog: str
@@ -39,6 +40,7 @@ class DataQualityConfig:
     quality_log_table: str
     feedback_table: str
     station: str
+    source_table: str | None = None
 
 
 def _get_table_name(config: DataQualityConfig, table_name: str) -> str:
@@ -105,9 +107,21 @@ def get_data_quality_config_from_env() -> DataQualityConfig:
     """
     monitor_catalog = os.getenv("MONITOR_CATALOG")
     monitor_schema = os.getenv("MONITOR_SCHEMA", "geothermal")
+    monitor_source_table = os.getenv("MONITOR_SOURCE_TABLE")
 
     if not monitor_catalog:
         raise RuntimeError("MONITOR_CATALOG is not configured.")
+
+    if monitor_source_table is None:
+        stream_catalog_raw = os.getenv("STREAM_CATALOG_RAW")
+        if stream_catalog_raw:
+            monitor_source_table = ".".join(
+                [
+                    stream_catalog_raw,
+                    os.getenv("SOURCE_SCHEMA", "pi"),
+                    os.getenv("SOURCE_TABLE", "geothermal_station_streaming"),
+                ]
+            )
 
     return DataQualityConfig(
         monitor_catalog=monitor_catalog,
@@ -119,6 +133,7 @@ def get_data_quality_config_from_env() -> DataQualityConfig:
             "monitor_incident_feedback",
         ),
         station=os.getenv("STATION", "geothermal station"),
+        source_table=monitor_source_table,
     )
 
 
@@ -191,6 +206,11 @@ def build_recent_incidents_query(
     incident_table = get_incident_table_name(config)
     quality_log_table = get_quality_log_table_name(config)
     feedback_table = get_feedback_table_name(config)
+    source_filter_sql = ""
+    parameters: list[object] = []
+    if config.source_table:
+        source_filter_sql = "\n          AND incident.source_table = ?"
+        parameters.append(config.source_table)
 
     sql = f"""
         WITH feedback AS (
@@ -232,13 +252,32 @@ def build_recent_incidents_query(
          AND quality_log.window_end >= incident.incident_start
         LEFT JOIN feedback
           ON feedback.incident_id = incident.incident_id
-        WHERE incident.station = ?
-          AND incident.status = 'failed'
+        WHERE incident.status = 'failed'{source_filter_sql}
           AND (incident.update_ts >= ? OR feedback.feedback_count IS NULL)
         ORDER BY incident.update_ts DESC, incident.incident_start DESC, quality_log.window_start
     """
 
-    return sql, [config.station, since_time]
+    parameters.append(since_time)
+    return sql, parameters
+
+
+def normalise_quality_incident_display_columns(df, config: DataQualityConfig):
+    """
+    Replace stored monitor identifiers with safe app display labels.
+
+    Args:
+        df: Incident rows returned by the monitor query.
+        config: Data quality runtime configuration.
+
+    Returns:
+        pandas.DataFrame: Copy of the input rows with display-safe identifier columns.
+    """
+    normalised_df = df.copy()
+    if "station" in normalised_df.columns:
+        normalised_df["station"] = config.station
+    if config.source_table and "source_table" in normalised_df.columns:
+        normalised_df["source_table"] = config.source_table
+    return normalised_df
 
 
 def build_feedback_table_ddl(config: DataQualityConfig) -> str:
@@ -344,7 +383,8 @@ def fetch_recent_quality_incidents(
         pandas.DataFrame: Joined incident and quality log rows.
     """
     query, parameters = build_recent_incidents_query(config, since_time)
-    return _fetch_dataframe(query, parameters)
+    df = _fetch_dataframe(query, parameters)
+    return normalise_quality_incident_display_columns(df, config)
 
 
 def fetch_incident_tag_history(
