@@ -16,7 +16,7 @@ from agent_data_profiling.tag_catalog import TAG_CATALOG
 DISPLAY_TIMEZONE = ZoneInfo("Pacific/Auckland")
 AI_GATEWAY_PATH = "/ai-gateway/mlflow/v1"
 CHAT_COMPLETIONS_PATH = "/chat/completions"
-RESPONSES_ENDPOINT_PATH = "/serving-endpoints/responses"
+SERVING_ENDPOINTS_PATH = "/serving-endpoints"
 PROMPT_DIR_ENV_VAR = "AGENT_DATA_PROFILING_LLM_PROMPT_DIR"
 DEFAULT_PROMPT_DIR = Path(__file__).with_name("prompts")
 DEFAULT_MAX_TOKENS = 2048
@@ -153,7 +153,9 @@ def get_supervisor_agent_config_from_env() -> SupervisorAgentConfig:
 
     return SupervisorAgentConfig(
         endpoint_name=endpoint_name,
-        responses_url=f"{_normalise_workspace_host(host)}{RESPONSES_ENDPOINT_PATH}",
+        responses_url=(
+            f"{_normalise_workspace_host(host)}{SERVING_ENDPOINTS_PATH}/{endpoint_name}/invocations"
+        ),
         timeout_seconds=timeout_seconds,
     )
 
@@ -308,7 +310,6 @@ def query_supervisor_agent(
         "Content-Type": "application/json",
     }
     request_body = {
-        "model": config.endpoint_name,
         "input": [{"role": "user", "content": prompt}],
     }
 
@@ -533,6 +534,16 @@ def build_supervisor_incident_prompt(
     return (
         f"Investigate why tag {tag_name} triggered an {rule_type} incident from "
         f"{incident_start} to {incident_end}.\n"
+        "Determine whether the likely explanation is a real process issue, a data quality "
+        "issue, or a monitoring-rule threshold/baseline issue, using the configured "
+        "multi-agent supervisor workflow.\n\n"
+        "Incident packet JSON:\n"
+        f"{context_json}\n\n"
+        "Use the Supervisor Agent's configured order and specialist agents. "
+        "Return only the final user-facing conclusion in a concise format. "
+        "Do not mention graph knowledge, Graphify, station context, or process context unless "
+        "the user explicitly asks. Do not invent SQL results, measurements, thresholds, tags, "
+        "or root causes."
     )
 
 
