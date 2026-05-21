@@ -66,12 +66,16 @@ MONITORED_TAGS = [
 # COMMAND ----------
 
 source_columns = set(spark.table(SOURCE_TABLE).columns)
+column_lookup = {column.lower(): column for column in source_columns}
 
-if TIMESTAMP_COL not in source_columns:
+if TIMESTAMP_COL.lower() not in column_lookup:
     raise ValueError(f"{SOURCE_TABLE} does not contain timestamp column {TIMESTAMP_COL}")
 
-available_tags = [tag for tag in MONITORED_TAGS if tag in source_columns]
-missing_tags = [tag for tag in MONITORED_TAGS if tag not in source_columns]
+source_timestamp_col = column_lookup[TIMESTAMP_COL.lower()]
+available_tags = [
+    column_lookup[tag.lower()] for tag in MONITORED_TAGS if tag.lower() in column_lookup
+]
+missing_tags = [tag for tag in MONITORED_TAGS if tag.lower() not in column_lookup]
 
 print(f"Source table: {SOURCE_TABLE}")
 print(f"Target table: {TARGET_TABLE}")
@@ -110,14 +114,14 @@ CREATE TABLE {TARGET_TABLE}
 USING DELTA
 AS
 SELECT
-    {quote_identifier(TIMESTAMP_COL)} AS Pi_Timestamp,
+    {quote_identifier(source_timestamp_col)} AS Pi_Timestamp,
     tag_name,
     CAST(tag_value AS DOUBLE) AS tag_value
 FROM {SOURCE_TABLE}
 LATERAL VIEW stack({len(available_tags)},
     {stack_items}
 ) tag_stack AS tag_name, tag_value
-WHERE {quote_identifier(TIMESTAMP_COL)} IS NOT NULL
+WHERE {quote_identifier(source_timestamp_col)} IS NOT NULL
   AND tag_value IS NOT NULL
 """)
 

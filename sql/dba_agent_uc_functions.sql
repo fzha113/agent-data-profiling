@@ -445,7 +445,10 @@ filtered AS (
         params.upper_threshold_value
     FROM workspace.default.sample_incident_tag_values AS tag_values
     CROSS JOIN params
-    WHERE array_contains(params.tag_names, tag_values.tag_name)
+    WHERE exists(
+        params.tag_names,
+        requested_tag -> lower(requested_tag) = lower(tag_values.tag_name)
+    )
       AND tag_values.Pi_Timestamp >= params.start_ts
       AND tag_values.Pi_Timestamp < params.end_ts
 ),
