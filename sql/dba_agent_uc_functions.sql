@@ -134,25 +134,18 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return capped raw long-form points for requested tags and UTC window.'
 RETURN
-WITH params AS (
-    SELECT
-        get_raw_points_sample.start_ts AS start_ts,
-        get_raw_points_sample.end_ts AS end_ts
-),
-target_tags AS (
-    SELECT explode(get_raw_points_sample.tag_names) AS tag_name
-),
-filtered AS (
+WITH filtered AS (
     SELECT
         tag_values.tag_name,
         tag_values.Pi_Timestamp,
         tag_values.tag_value
-    FROM target_tags
-    CROSS JOIN params
-    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
-        ON tag_values.tag_name = target_tags.tag_name
-    WHERE tag_values.Pi_Timestamp >= params.start_ts
-      AND tag_values.Pi_Timestamp < params.end_ts
+    FROM workspace.default.sample_incident_tag_values AS tag_values
+    WHERE exists(
+        get_raw_points_sample.tag_names,
+        requested_tag -> requested_tag = tag_values.tag_name
+    )
+      AND tag_values.Pi_Timestamp >= get_raw_points_sample.start_ts
+      AND tag_values.Pi_Timestamp < get_raw_points_sample.end_ts
 ),
 ranked AS (
     SELECT
@@ -221,25 +214,18 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return per-tag descriptive stats for a requested UTC window.'
 RETURN
-WITH params AS (
-    SELECT
-        get_related_tag_window_stats.start_ts AS start_ts,
-        get_related_tag_window_stats.end_ts AS end_ts
-),
-target_tags AS (
-    SELECT explode(get_related_tag_window_stats.tag_names) AS tag_name
-),
-filtered AS (
+WITH filtered AS (
     SELECT
         tag_values.tag_name,
         tag_values.Pi_Timestamp,
         tag_values.tag_value
-    FROM target_tags
-    CROSS JOIN params
-    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
-        ON tag_values.tag_name = target_tags.tag_name
-    WHERE tag_values.Pi_Timestamp >= params.start_ts
-      AND tag_values.Pi_Timestamp < params.end_ts
+    FROM workspace.default.sample_incident_tag_values AS tag_values
+    WHERE exists(
+        get_related_tag_window_stats.tag_names,
+        requested_tag -> requested_tag = tag_values.tag_name
+    )
+      AND tag_values.Pi_Timestamp >= get_related_tag_window_stats.start_ts
+      AND tag_values.Pi_Timestamp < get_related_tag_window_stats.end_ts
 ),
 stats AS (
     SELECT
@@ -294,36 +280,27 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return before, during, and after stats for requested tags around an incident.'
 RETURN
-WITH params AS (
-    SELECT
-        get_before_during_after_stats.before_start_ts AS before_start_ts,
-        get_before_during_after_stats.incident_start_ts AS incident_start_ts,
-        get_before_during_after_stats.incident_end_ts AS incident_end_ts,
-        get_before_during_after_stats.after_end_ts AS after_end_ts
-),
-target_tags AS (
-    SELECT explode(get_before_during_after_stats.tag_names) AS tag_name
-),
-filtered AS (
+WITH filtered AS (
     SELECT
         tag_values.tag_name,
         tag_values.Pi_Timestamp,
         tag_values.tag_value,
         CASE
-            WHEN tag_values.Pi_Timestamp >= params.before_start_ts
-             AND tag_values.Pi_Timestamp < params.incident_start_ts THEN 'before'
-            WHEN tag_values.Pi_Timestamp >= params.incident_start_ts
-             AND tag_values.Pi_Timestamp < params.incident_end_ts THEN 'during'
-            WHEN tag_values.Pi_Timestamp >= params.incident_end_ts
-             AND tag_values.Pi_Timestamp < params.after_end_ts THEN 'after'
+            WHEN tag_values.Pi_Timestamp >= get_before_during_after_stats.before_start_ts
+             AND tag_values.Pi_Timestamp < get_before_during_after_stats.incident_start_ts THEN 'before'
+            WHEN tag_values.Pi_Timestamp >= get_before_during_after_stats.incident_start_ts
+             AND tag_values.Pi_Timestamp < get_before_during_after_stats.incident_end_ts THEN 'during'
+            WHEN tag_values.Pi_Timestamp >= get_before_during_after_stats.incident_end_ts
+             AND tag_values.Pi_Timestamp < get_before_during_after_stats.after_end_ts THEN 'after'
             ELSE NULL
         END AS window_phase
-    FROM target_tags
-    CROSS JOIN params
-    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
-        ON tag_values.tag_name = target_tags.tag_name
-    WHERE tag_values.Pi_Timestamp >= params.before_start_ts
-      AND tag_values.Pi_Timestamp < params.after_end_ts
+    FROM workspace.default.sample_incident_tag_values AS tag_values
+    WHERE exists(
+        get_before_during_after_stats.tag_names,
+        requested_tag -> requested_tag = tag_values.tag_name
+    )
+      AND tag_values.Pi_Timestamp >= get_before_during_after_stats.before_start_ts
+      AND tag_values.Pi_Timestamp < get_before_during_after_stats.after_end_ts
 ),
 stats AS (
     SELECT
@@ -379,25 +356,18 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return point counts and timestamp gap stats for requested tags and UTC window.'
 RETURN
-WITH params AS (
-    SELECT
-        get_missingness_gap_profile.start_ts AS start_ts,
-        get_missingness_gap_profile.end_ts AS end_ts
-),
-target_tags AS (
-    SELECT explode(get_missingness_gap_profile.tag_names) AS tag_name
-),
-filtered AS (
+WITH filtered AS (
     SELECT
         tag_values.tag_name,
         tag_values.Pi_Timestamp,
         tag_values.tag_value
-    FROM target_tags
-    CROSS JOIN params
-    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
-        ON tag_values.tag_name = target_tags.tag_name
-    WHERE tag_values.Pi_Timestamp >= params.start_ts
-      AND tag_values.Pi_Timestamp < params.end_ts
+    FROM workspace.default.sample_incident_tag_values AS tag_values
+    WHERE exists(
+        get_missingness_gap_profile.tag_names,
+        requested_tag -> requested_tag = tag_values.tag_name
+    )
+      AND tag_values.Pi_Timestamp >= get_missingness_gap_profile.start_ts
+      AND tag_values.Pi_Timestamp < get_missingness_gap_profile.end_ts
 ),
 ordered AS (
     SELECT
@@ -420,18 +390,16 @@ gaps AS (
 ),
 stats AS (
     SELECT
-        target_tags.tag_name,
-        COUNT(gaps.tag_value) AS point_count,
-        MIN(gaps.Pi_Timestamp) AS first_ts,
-        MAX(gaps.Pi_Timestamp) AS last_ts,
-        MAX(gaps.gap_seconds) AS max_gap_seconds,
-        AVG(gaps.gap_seconds) AS avg_gap_seconds,
-        SUM(CASE WHEN gaps.gap_seconds > 300 THEN 1 ELSE 0 END) AS gaps_over_5m,
-        SUM(CASE WHEN gaps.gap_seconds > 900 THEN 1 ELSE 0 END) AS gaps_over_15m
-    FROM target_tags
-    LEFT JOIN gaps
-        ON gaps.tag_name = target_tags.tag_name
-    GROUP BY target_tags.tag_name
+        tag_name,
+        COUNT(tag_value) AS point_count,
+        MIN(Pi_Timestamp) AS first_ts,
+        MAX(Pi_Timestamp) AS last_ts,
+        MAX(gap_seconds) AS max_gap_seconds,
+        AVG(gap_seconds) AS avg_gap_seconds,
+        SUM(CASE WHEN gap_seconds > 300 THEN 1 ELSE 0 END) AS gaps_over_5m,
+        SUM(CASE WHEN gap_seconds > 900 THEN 1 ELSE 0 END) AS gaps_over_15m
+    FROM gaps
+    GROUP BY tag_name
 )
 SELECT to_json(named_struct(
     'status', 'executed',
@@ -467,23 +435,7 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return counts and extrema relative to supplied lower and upper outlier thresholds.'
 RETURN
-WITH params AS (
-    SELECT
-        get_outlier_threshold_context.tag_names AS tag_names,
-        get_outlier_threshold_context.start_ts AS start_ts,
-        get_outlier_threshold_context.end_ts AS end_ts,
-        get_outlier_threshold_context.lower_threshold AS lower_threshold_value,
-        get_outlier_threshold_context.upper_threshold AS upper_threshold_value
-),
-target_tags AS (
-    SELECT
-        requested_tag,
-        regexp_replace(trim(lower(requested_tag)), '[^a-z0-9]+', '_') AS requested_tag_key
-    FROM (
-        SELECT explode(get_outlier_threshold_context.tag_names) AS requested_tag
-    )
-),
-tag_catalog AS (
+WITH tag_catalog AS (
     SELECT
         regexp_replace(trim(lower(tag_name)), '[^a-z0-9]+', '_') AS tag_key,
         MIN(tag_name) AS matched_tag,
@@ -495,29 +447,40 @@ tag_catalog AS (
 ),
 matched_tags AS (
     SELECT
-        target_tags.requested_tag,
+        element_at(filter(
+            get_outlier_threshold_context.tag_names,
+            requested_tag -> regexp_replace(trim(lower(requested_tag)), '[^a-z0-9]+', '_') = tag_catalog.tag_key
+        ), 1) AS requested_tag,
         tag_catalog.matched_tag,
         tag_catalog.catalog_point_count,
         tag_catalog.catalog_min_ts,
         tag_catalog.catalog_max_ts
-    FROM target_tags
-    LEFT JOIN tag_catalog
-        ON target_tags.requested_tag_key = tag_catalog.tag_key
+    FROM tag_catalog
+    WHERE exists(
+        get_outlier_threshold_context.tag_names,
+        requested_tag -> regexp_replace(trim(lower(requested_tag)), '[^a-z0-9]+', '_') = tag_catalog.tag_key
+    )
 ),
 filtered AS (
     SELECT
-        matched_tags.requested_tag,
-        matched_tags.matched_tag,
+        element_at(filter(
+            get_outlier_threshold_context.tag_names,
+            requested_tag -> regexp_replace(trim(lower(requested_tag)), '[^a-z0-9]+', '_')
+                = regexp_replace(trim(lower(tag_values.tag_name)), '[^a-z0-9]+', '_')
+        ), 1) AS requested_tag,
+        tag_values.tag_name AS matched_tag,
         tag_values.Pi_Timestamp,
         tag_values.tag_value,
-        params.lower_threshold_value,
-        params.upper_threshold_value
-    FROM matched_tags
-    CROSS JOIN params
-    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
-        ON tag_values.tag_name = matched_tags.matched_tag
-    WHERE tag_values.Pi_Timestamp >= params.start_ts
-      AND tag_values.Pi_Timestamp < params.end_ts
+        get_outlier_threshold_context.lower_threshold AS lower_threshold_value,
+        get_outlier_threshold_context.upper_threshold AS upper_threshold_value
+    FROM workspace.default.sample_incident_tag_values AS tag_values
+    WHERE exists(
+        get_outlier_threshold_context.tag_names,
+        requested_tag -> regexp_replace(trim(lower(requested_tag)), '[^a-z0-9]+', '_')
+            = regexp_replace(trim(lower(tag_values.tag_name)), '[^a-z0-9]+', '_')
+    )
+      AND tag_values.Pi_Timestamp >= get_outlier_threshold_context.start_ts
+      AND tag_values.Pi_Timestamp < get_outlier_threshold_context.end_ts
 ),
 stats AS (
     SELECT
@@ -537,25 +500,6 @@ stats AS (
             AS above_upper_threshold_count
     FROM filtered
     GROUP BY requested_tag, matched_tag
-),
-stats_with_matches AS (
-    SELECT
-        matched_tags.requested_tag,
-        matched_tags.matched_tag,
-        COALESCE(stats.point_count, 0) AS point_count,
-        stats.first_ts,
-        stats.last_ts,
-        stats.min_value,
-        stats.avg_value,
-        stats.max_value,
-        params.lower_threshold_value,
-        params.upper_threshold_value,
-        COALESCE(stats.below_lower_threshold_count, 0) AS below_lower_threshold_count,
-        COALESCE(stats.above_upper_threshold_count, 0) AS above_upper_threshold_count
-    FROM matched_tags
-    CROSS JOIN params
-    LEFT JOIN stats
-        ON stats.requested_tag = matched_tags.requested_tag
 ),
 tag_match_json AS (
     SELECT array_sort(collect_list(named_struct(
@@ -585,7 +529,7 @@ stats_json AS (
         'below_lower_threshold_count', below_lower_threshold_count,
         'above_upper_threshold_count', above_upper_threshold_count
     ))) AS stats
-    FROM stats_with_matches
+    FROM stats
 )
 SELECT to_json(named_struct(
     'status', 'executed',

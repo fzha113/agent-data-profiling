@@ -49,6 +49,8 @@ from agent_data_profiling.tag_catalog import DEFAULT_TAGS, TAG_CATALOG, get_cata
 
 DEFAULT_START_DATE = date(2024, 6, 10)
 DEFAULT_END_DATE = date(2024, 6, 17)
+APP_DISPLAY_NAME = "GeoSight AI"
+DEMO_DISCLAIMER_TEXT = "This app is for demoing purposes only"
 DATE_PICKER_MIN_DATE = date(2024, 6, 1)
 DATE_PICKER_MAX_DATE = date(2024, 10, 1)
 LARGE_WINDOW_WARNING_DAYS = 30
@@ -2447,6 +2449,40 @@ def render_station_sensor_graph_section(
     components.html(graph_html, height=820, scrolling=True)
 
 
+def render_demo_disclaimer() -> None:
+    """
+    Render the fixed demo-data disclaimer in the lower-left corner.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    st.markdown(
+        f"""
+        <style>
+        .demo-disclaimer {{
+            position: fixed;
+            left: 1rem;
+            bottom: 0.75rem;
+            z-index: 999;
+            padding: 0.35rem 0.55rem;
+            border: 1px solid rgba(100, 116, 139, 0.35);
+            border-radius: 0.4rem;
+            background: rgba(255, 255, 255, 0.88);
+            color: #475569;
+            font-size: 0.78rem;
+            line-height: 1.25;
+            pointer-events: none;
+        }}
+        </style>
+        <div class="demo-disclaimer">{DEMO_DISCLAIMER_TEXT}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     """
     Run the geothermal station agent data profiling Streamlit app.
@@ -2457,8 +2493,9 @@ def main() -> None:
     Returns:
         None.
     """
-    st.set_page_config(page_title="Geothermal Station Agent Data Profiling", layout="wide")
-    st.title("Geothermal Station Agent Data Profiling")
+    st.set_page_config(page_title=APP_DISPLAY_NAME, layout="wide")
+    st.title(APP_DISPLAY_NAME)
+    render_demo_disclaimer()
     selected_section = render_section_navigation()
 
     if selected_section == QUALITY_INCIDENTS_SECTION:
