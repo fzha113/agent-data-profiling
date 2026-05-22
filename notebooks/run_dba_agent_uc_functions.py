@@ -153,6 +153,7 @@ display(
             MAX(Pi_Timestamp) AS max_ts
         FROM {TARGET_TABLE}
         WHERE tag_name IN (
+            'Cooling_Tower_Fan_D_Current',
             '2nd_Stage_Brip_A_Current',
             '2nd_Stage_Brip_B_Current',
             '1ST_BRIP_A_MOTOR_SPEED',

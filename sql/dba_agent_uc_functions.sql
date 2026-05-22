@@ -436,25 +436,49 @@ WITH params AS (
         get_outlier_threshold_context.lower_threshold AS lower_threshold_value,
         get_outlier_threshold_context.upper_threshold AS upper_threshold_value
 ),
+target_tags AS (
+    SELECT explode(get_outlier_threshold_context.tag_names) AS requested_tag
+),
+tag_catalog AS (
+    SELECT
+        lower(tag_name) AS tag_key,
+        MIN(tag_name) AS matched_tag,
+        COUNT(*) AS catalog_point_count,
+        MIN(Pi_Timestamp) AS catalog_min_ts,
+        MAX(Pi_Timestamp) AS catalog_max_ts
+    FROM workspace.default.sample_incident_tag_values
+    GROUP BY lower(tag_name)
+),
+matched_tags AS (
+    SELECT
+        target_tags.requested_tag,
+        tag_catalog.matched_tag,
+        tag_catalog.catalog_point_count,
+        tag_catalog.catalog_min_ts,
+        tag_catalog.catalog_max_ts
+    FROM target_tags
+    LEFT JOIN tag_catalog
+        ON lower(target_tags.requested_tag) = tag_catalog.tag_key
+),
 filtered AS (
     SELECT
-        tag_values.tag_name,
+        matched_tags.requested_tag,
+        matched_tags.matched_tag,
         tag_values.Pi_Timestamp,
         tag_values.tag_value,
         params.lower_threshold_value,
         params.upper_threshold_value
-    FROM workspace.default.sample_incident_tag_values AS tag_values
+    FROM matched_tags
     CROSS JOIN params
-    WHERE exists(
-        params.tag_names,
-        requested_tag -> lower(requested_tag) = lower(tag_values.tag_name)
-    )
-      AND tag_values.Pi_Timestamp >= params.start_ts
+    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
+        ON tag_values.tag_name = matched_tags.matched_tag
+    WHERE tag_values.Pi_Timestamp >= params.start_ts
       AND tag_values.Pi_Timestamp < params.end_ts
 ),
 stats AS (
     SELECT
-        tag_name,
+        requested_tag,
+        matched_tag,
         COUNT(*) AS point_count,
         MIN(Pi_Timestamp) AS first_ts,
         MAX(Pi_Timestamp) AS last_ts,
@@ -468,7 +492,56 @@ stats AS (
         SUM(CASE WHEN tag_value > upper_threshold_value THEN 1 ELSE 0 END)
             AS above_upper_threshold_count
     FROM filtered
-    GROUP BY tag_name
+    GROUP BY requested_tag, matched_tag
+),
+stats_with_matches AS (
+    SELECT
+        matched_tags.requested_tag,
+        matched_tags.matched_tag,
+        COALESCE(stats.point_count, 0) AS point_count,
+        stats.first_ts,
+        stats.last_ts,
+        stats.min_value,
+        stats.avg_value,
+        stats.max_value,
+        params.lower_threshold_value,
+        params.upper_threshold_value,
+        COALESCE(stats.below_lower_threshold_count, 0) AS below_lower_threshold_count,
+        COALESCE(stats.above_upper_threshold_count, 0) AS above_upper_threshold_count
+    FROM matched_tags
+    CROSS JOIN params
+    LEFT JOIN stats
+        ON stats.requested_tag = matched_tags.requested_tag
+),
+tag_match_json AS (
+    SELECT array_sort(collect_list(named_struct(
+        'requested_tag', requested_tag,
+        'matched_tag', matched_tag,
+        'catalog_point_count', catalog_point_count,
+        'catalog_min_ts_utc', date_format(catalog_min_ts, 'yyyy-MM-dd HH:mm:ss'),
+        'catalog_max_ts_utc', date_format(catalog_max_ts, 'yyyy-MM-dd HH:mm:ss')
+    ))) AS tag_matches
+    FROM matched_tags
+),
+stats_json AS (
+    SELECT array_sort(collect_list(named_struct(
+        'requested_tag', requested_tag,
+        'tag_name', COALESCE(matched_tag, requested_tag),
+        'matched_tag', matched_tag,
+        'point_count', point_count,
+        'first_ts_utc', date_format(first_ts, 'yyyy-MM-dd HH:mm:ss'),
+        'last_ts_utc', date_format(last_ts, 'yyyy-MM-dd HH:mm:ss'),
+        'first_ts_nzt', date_format(from_utc_timestamp(first_ts, 'Pacific/Auckland'), 'yyyy-MM-dd HH:mm:ss'),
+        'last_ts_nzt', date_format(from_utc_timestamp(last_ts, 'Pacific/Auckland'), 'yyyy-MM-dd HH:mm:ss'),
+        'min_value', min_value,
+        'avg_value', avg_value,
+        'max_value', max_value,
+        'lower_threshold', lower_threshold_value,
+        'upper_threshold', upper_threshold_value,
+        'below_lower_threshold_count', below_lower_threshold_count,
+        'above_upper_threshold_count', above_upper_threshold_count
+    ))) AS stats
+    FROM stats_with_matches
 )
 SELECT to_json(named_struct(
     'status', 'executed',
@@ -478,24 +551,22 @@ SELECT to_json(named_struct(
         'tag_names', get_outlier_threshold_context.tag_names,
         'start_ts_utc', date_format(get_outlier_threshold_context.start_ts, 'yyyy-MM-dd HH:mm:ss'),
         'end_ts_utc', date_format(get_outlier_threshold_context.end_ts, 'yyyy-MM-dd HH:mm:ss'),
+        'start_ts_nzt', date_format(
+            from_utc_timestamp(get_outlier_threshold_context.start_ts, 'Pacific/Auckland'),
+            'yyyy-MM-dd HH:mm:ss'
+        ),
+        'end_ts_nzt', date_format(
+            from_utc_timestamp(get_outlier_threshold_context.end_ts, 'Pacific/Auckland'),
+            'yyyy-MM-dd HH:mm:ss'
+        ),
         'lower_threshold', get_outlier_threshold_context.lower_threshold,
         'upper_threshold', get_outlier_threshold_context.upper_threshold
     ),
-    'stats', array_sort(collect_list(named_struct(
-        'tag_name', tag_name,
-        'point_count', point_count,
-        'first_ts_utc', date_format(first_ts, 'yyyy-MM-dd HH:mm:ss'),
-        'last_ts_utc', date_format(last_ts, 'yyyy-MM-dd HH:mm:ss'),
-        'min_value', min_value,
-        'avg_value', avg_value,
-        'max_value', max_value,
-        'lower_threshold', lower_threshold_value,
-        'upper_threshold', upper_threshold_value,
-        'below_lower_threshold_count', below_lower_threshold_count,
-        'above_upper_threshold_count', above_upper_threshold_count
-    )))
+    'tag_matches', tag_match_json.tag_matches,
+    'stats', stats_json.stats
 ))
-FROM stats;
+FROM tag_match_json
+CROSS JOIN stats_json;
 
 -- Smoke tests to run manually after executing the script:
 --
@@ -511,6 +582,14 @@ FROM stats;
 --   array('Condenser_Pressure_A', 'Condenser_Pressure_B'),
 --   TIMESTAMP('2024-07-10 09:45:00'),
 --   TIMESTAMP('2024-07-10 10:30:00')
+-- );
+--
+-- SELECT workspace.default.get_outlier_threshold_context(
+--   array('Cooling_Tower_Fan_D_Current'),
+--   to_timestamp('2024-07-21T20:00:00Z'),
+--   to_timestamp('2024-07-21T23:00:00Z'),
+--   74D,
+--   240D
 -- );
 --
 -- Required app service principal permissions:
