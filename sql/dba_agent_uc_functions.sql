@@ -437,17 +437,22 @@ WITH params AS (
         get_outlier_threshold_context.upper_threshold AS upper_threshold_value
 ),
 target_tags AS (
-    SELECT explode(get_outlier_threshold_context.tag_names) AS requested_tag
+    SELECT
+        requested_tag,
+        regexp_replace(trim(lower(requested_tag)), '[^a-z0-9]+', '_') AS requested_tag_key
+    FROM (
+        SELECT explode(get_outlier_threshold_context.tag_names) AS requested_tag
+    )
 ),
 tag_catalog AS (
     SELECT
-        lower(tag_name) AS tag_key,
+        regexp_replace(trim(lower(tag_name)), '[^a-z0-9]+', '_') AS tag_key,
         MIN(tag_name) AS matched_tag,
         COUNT(*) AS catalog_point_count,
         MIN(Pi_Timestamp) AS catalog_min_ts,
         MAX(Pi_Timestamp) AS catalog_max_ts
     FROM workspace.default.sample_incident_tag_values
-    GROUP BY lower(tag_name)
+    GROUP BY regexp_replace(trim(lower(tag_name)), '[^a-z0-9]+', '_')
 ),
 matched_tags AS (
     SELECT
@@ -458,7 +463,7 @@ matched_tags AS (
         tag_catalog.catalog_max_ts
     FROM target_tags
     LEFT JOIN tag_catalog
-        ON lower(target_tags.requested_tag) = tag_catalog.tag_key
+        ON target_tags.requested_tag_key = tag_catalog.tag_key
 ),
 filtered AS (
     SELECT
