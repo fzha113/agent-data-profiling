@@ -49,7 +49,7 @@ from agent_data_profiling.tag_catalog import DEFAULT_TAGS, TAG_CATALOG, get_cata
 
 DEFAULT_START_DATE = date(2024, 6, 10)
 DEFAULT_END_DATE = date(2024, 6, 17)
-APP_DISPLAY_NAME = "GeoSight AI"
+APP_DISPLAY_NAME = "Geothermal Sight AI"
 DEMO_DISCLAIMER_TEXT = "This app is for demoing purposes only"
 DATE_PICKER_MIN_DATE = date(2024, 6, 1)
 DATE_PICKER_MAX_DATE = date(2024, 10, 1)
