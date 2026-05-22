@@ -134,15 +134,25 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return capped raw long-form points for requested tags and UTC window.'
 RETURN
-WITH filtered AS (
+WITH params AS (
     SELECT
-        tag_name,
-        Pi_Timestamp,
-        tag_value
-    FROM workspace.default.sample_incident_tag_values
-    WHERE array_contains(get_raw_points_sample.tag_names, tag_name)
-      AND Pi_Timestamp >= get_raw_points_sample.start_ts
-      AND Pi_Timestamp < get_raw_points_sample.end_ts
+        get_raw_points_sample.start_ts AS start_ts,
+        get_raw_points_sample.end_ts AS end_ts
+),
+target_tags AS (
+    SELECT explode(get_raw_points_sample.tag_names) AS tag_name
+),
+filtered AS (
+    SELECT
+        tag_values.tag_name,
+        tag_values.Pi_Timestamp,
+        tag_values.tag_value
+    FROM target_tags
+    CROSS JOIN params
+    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
+        ON tag_values.tag_name = target_tags.tag_name
+    WHERE tag_values.Pi_Timestamp >= params.start_ts
+      AND tag_values.Pi_Timestamp < params.end_ts
 ),
 ranked AS (
     SELECT
@@ -211,15 +221,25 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return per-tag descriptive stats for a requested UTC window.'
 RETURN
-WITH filtered AS (
+WITH params AS (
     SELECT
-        tag_name,
-        Pi_Timestamp,
-        tag_value
-    FROM workspace.default.sample_incident_tag_values
-    WHERE array_contains(get_related_tag_window_stats.tag_names, tag_name)
-      AND Pi_Timestamp >= get_related_tag_window_stats.start_ts
-      AND Pi_Timestamp < get_related_tag_window_stats.end_ts
+        get_related_tag_window_stats.start_ts AS start_ts,
+        get_related_tag_window_stats.end_ts AS end_ts
+),
+target_tags AS (
+    SELECT explode(get_related_tag_window_stats.tag_names) AS tag_name
+),
+filtered AS (
+    SELECT
+        tag_values.tag_name,
+        tag_values.Pi_Timestamp,
+        tag_values.tag_value
+    FROM target_tags
+    CROSS JOIN params
+    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
+        ON tag_values.tag_name = target_tags.tag_name
+    WHERE tag_values.Pi_Timestamp >= params.start_ts
+      AND tag_values.Pi_Timestamp < params.end_ts
 ),
 stats AS (
     SELECT
@@ -274,24 +294,36 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return before, during, and after stats for requested tags around an incident.'
 RETURN
-WITH filtered AS (
+WITH params AS (
     SELECT
-        tag_name,
-        Pi_Timestamp,
-        tag_value,
+        get_before_during_after_stats.before_start_ts AS before_start_ts,
+        get_before_during_after_stats.incident_start_ts AS incident_start_ts,
+        get_before_during_after_stats.incident_end_ts AS incident_end_ts,
+        get_before_during_after_stats.after_end_ts AS after_end_ts
+),
+target_tags AS (
+    SELECT explode(get_before_during_after_stats.tag_names) AS tag_name
+),
+filtered AS (
+    SELECT
+        tag_values.tag_name,
+        tag_values.Pi_Timestamp,
+        tag_values.tag_value,
         CASE
-            WHEN Pi_Timestamp >= get_before_during_after_stats.before_start_ts
-             AND Pi_Timestamp < get_before_during_after_stats.incident_start_ts THEN 'before'
-            WHEN Pi_Timestamp >= get_before_during_after_stats.incident_start_ts
-             AND Pi_Timestamp < get_before_during_after_stats.incident_end_ts THEN 'during'
-            WHEN Pi_Timestamp >= get_before_during_after_stats.incident_end_ts
-             AND Pi_Timestamp < get_before_during_after_stats.after_end_ts THEN 'after'
+            WHEN tag_values.Pi_Timestamp >= params.before_start_ts
+             AND tag_values.Pi_Timestamp < params.incident_start_ts THEN 'before'
+            WHEN tag_values.Pi_Timestamp >= params.incident_start_ts
+             AND tag_values.Pi_Timestamp < params.incident_end_ts THEN 'during'
+            WHEN tag_values.Pi_Timestamp >= params.incident_end_ts
+             AND tag_values.Pi_Timestamp < params.after_end_ts THEN 'after'
             ELSE NULL
         END AS window_phase
-    FROM workspace.default.sample_incident_tag_values
-    WHERE array_contains(get_before_during_after_stats.tag_names, tag_name)
-      AND Pi_Timestamp >= get_before_during_after_stats.before_start_ts
-      AND Pi_Timestamp < get_before_during_after_stats.after_end_ts
+    FROM target_tags
+    CROSS JOIN params
+    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
+        ON tag_values.tag_name = target_tags.tag_name
+    WHERE tag_values.Pi_Timestamp >= params.before_start_ts
+      AND tag_values.Pi_Timestamp < params.after_end_ts
 ),
 stats AS (
     SELECT
@@ -347,18 +379,25 @@ LANGUAGE SQL
 READS SQL DATA
 COMMENT 'Return point counts and timestamp gap stats for requested tags and UTC window.'
 RETURN
-WITH target_tags AS (
+WITH params AS (
+    SELECT
+        get_missingness_gap_profile.start_ts AS start_ts,
+        get_missingness_gap_profile.end_ts AS end_ts
+),
+target_tags AS (
     SELECT explode(get_missingness_gap_profile.tag_names) AS tag_name
 ),
 filtered AS (
     SELECT
-        tag_name,
-        Pi_Timestamp,
-        tag_value
-    FROM workspace.default.sample_incident_tag_values
-    WHERE array_contains(get_missingness_gap_profile.tag_names, tag_name)
-      AND Pi_Timestamp >= get_missingness_gap_profile.start_ts
-      AND Pi_Timestamp < get_missingness_gap_profile.end_ts
+        tag_values.tag_name,
+        tag_values.Pi_Timestamp,
+        tag_values.tag_value
+    FROM target_tags
+    CROSS JOIN params
+    INNER JOIN workspace.default.sample_incident_tag_values AS tag_values
+        ON tag_values.tag_name = target_tags.tag_name
+    WHERE tag_values.Pi_Timestamp >= params.start_ts
+      AND tag_values.Pi_Timestamp < params.end_ts
 ),
 ordered AS (
     SELECT

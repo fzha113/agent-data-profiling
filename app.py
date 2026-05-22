@@ -18,8 +18,6 @@ from agent_data_profiling.comparison import (
 from agent_data_profiling.llm import (
     build_incident_llm_context,
     build_supervisor_incident_prompt,
-    build_tag_profile_llm_context,
-    build_tag_profile_llm_messages,
     get_ai_gateway_config_from_env,
     get_supervisor_agent_config_from_env,
     query_ai_gateway,
@@ -62,7 +60,7 @@ PI_TIMESTAMP_DISPLAY_COLUMN = "Pi_Timestamp_NZT"
 QUALITY_INCIDENTS_SECTION = "Data quality incidents"
 TAG_PROFILING_SECTION = "Tag profiling"
 COMPARE_TAGS_SECTION = "Compare tags"
-STATION_SENSOR_GRAPH_SECTION = "Station sensor graph"
+STATION_SENSOR_GRAPH_SECTION = "Knowledge graph"
 APP_SECTIONS = (
     QUALITY_INCIDENTS_SECTION,
     TAG_PROFILING_SECTION,
@@ -76,7 +74,6 @@ QUALITY_CONTEXT_RESULT_STATE_KEY = "quality_incident_context_results"
 QUALITY_GRID_VERSION_STATE_KEY = "quality_incident_grid_version"
 PROFILING_RESULT_STATE_KEY = "profiling_result"
 COMPARISON_RESULT_STATE_KEY = "comparison_result"
-LLM_PROFILE_ANALYSIS_STATE_KEY = "llm_profile_analyses"
 LLM_INCIDENT_ANALYSIS_STATE_KEY = "llm_incident_analyses"
 PROFILING_TAGS_WIDGET_KEY = "profiling_tags"
 PROFILING_START_DATE_WIDGET_KEY = "profiling_start_date"
@@ -934,14 +931,6 @@ def render_tag_profile(
         baseline_start_time,
         baseline_end_time,
     )
-    render_tag_profile_ai_analysis(
-        tag,
-        profile_result,
-        recent_start_time,
-        recent_end_time,
-        baseline_start_time,
-        baseline_end_time,
-    )
 
 
 def load_llm_analysis_for_ui(
@@ -1091,61 +1080,6 @@ def load_supervisor_incident_analysis_for_ui(
         with st.expander("Technical detail"):
             st.exception(exc)
         return None
-
-
-def render_tag_profile_ai_analysis(
-    tag: str,
-    profile_result: dict,
-    recent_start_time: datetime,
-    recent_end_time: datetime,
-    baseline_start_time: datetime,
-    baseline_end_time: datetime,
-) -> None:
-    """
-    Render an AI-generated analysis for one tag profile when requested.
-
-    Args:
-        tag: Raw tag column name.
-        profile_result: Profile datasets for the tag.
-        recent_start_time: Inclusive recent period start timestamp.
-        recent_end_time: Inclusive recent period end timestamp.
-        baseline_start_time: Inclusive baseline period start timestamp.
-        baseline_end_time: Inclusive baseline period end timestamp.
-
-    Returns:
-        None.
-    """
-    analysis_key = (
-        f"{tag}|{recent_start_time.isoformat()}|{recent_end_time.isoformat()}|"
-        f"{baseline_start_time.isoformat()}|{baseline_end_time.isoformat()}"
-    )
-    analyses = st.session_state.setdefault(LLM_PROFILE_ANALYSIS_STATE_KEY, {})
-
-    if st.button(
-        "AI explain profile",
-        key=f"ai_profile_{analysis_key}",
-        type="secondary",
-    ):
-        context = build_tag_profile_llm_context(
-            tag,
-            profile_result,
-            recent_start_time,
-            recent_end_time,
-            baseline_start_time,
-            baseline_end_time,
-        )
-        analysis = load_llm_analysis_for_ui(
-            messages=build_tag_profile_llm_messages(context),
-            request_tags={"feature": "tag_profiling", "tag": tag},
-            spinner_message="Generating AI profile summary...",
-            error_message="Failed to generate AI profile summary.",
-        )
-        if analysis is not None:
-            analyses[analysis_key] = analysis
-
-    if analysis_key in analyses:
-        st.markdown("##### AI profile summary")
-        st.markdown(analyses[analysis_key])
 
 
 def format_period_label(start_time: datetime, end_time: datetime) -> str:
@@ -2495,7 +2429,7 @@ def render_station_sensor_graph_section(
     html_path: Path | str = STATION_SENSOR_GRAPH_HTML_PATH,
 ) -> None:
     """
-    Render the prebuilt 3D Graphify station sensor graph.
+    Render the prebuilt 3D Graphify knowledge graph.
 
     Args:
         html_path: Local path to the HTML artifact.
@@ -2503,7 +2437,7 @@ def render_station_sensor_graph_section(
     Returns:
         None.
     """
-    st.subheader("Station sensor graph")
+    st.subheader("Knowledge graph")
     graph_html_path = Path(html_path)
     if not graph_html_path.exists():
         st.warning(f"Graph file not found: {graph_html_path}")
