@@ -505,7 +505,7 @@ def render_quality_sidebar() -> bool:
     render_sidebar_header()
     st.sidebar.subheader("Data quality incidents")
     st.sidebar.caption(
-        f"Shows failed incidents updated in the last {QUALITY_INCIDENT_LOOKBACK_DAYS} days. "
+        "Shows failed incidents for the configured source. "
         f"Monitor jobs refresh every {QUALITY_MONITOR_REFRESH_MINUTES} minutes."
     )
     return st.sidebar.button("Refresh incidents", type="primary")
@@ -2349,18 +2349,16 @@ def render_quality_incident_result(result: dict) -> None:
         None.
     """
     quality_config = result["quality_config"]
-    since_time = result["since_time"]
     df = result["df"]
 
     if df.empty:
-        st.info("No failed data quality incidents were updated in the last week.")
+        st.info("No failed data quality incidents were returned.")
         return
 
     summary_df = build_quality_incident_summary(df)
     render_quality_incident_metrics(summary_df)
     st.caption(
-        f"Monitor source: `{quality_config.monitor_catalog}.{quality_config.monitor_schema}` "
-        f"| Since: {format_period_label(since_time, datetime.now(UTC))}"
+        f"Monitor source: `{quality_config.monitor_catalog}.{quality_config.monitor_schema}`"
     )
 
     display_summary_df = convert_columns_to_nzt_display(
@@ -2400,10 +2398,6 @@ def render_quality_incidents_section(refresh_incidents: bool = False) -> None:
         None.
     """
     st.subheader("Data quality incidents")
-    st.caption(
-        f"Failed geothermal station monitor incidents updated in the last {QUALITY_INCIDENT_LOOKBACK_DAYS} days. "
-        f"The monitoring job runs every {QUALITY_MONITOR_REFRESH_MINUTES} minutes."
-    )
 
     stored_result = get_session_result(QUALITY_RESULT_STATE_KEY)
     if refresh_incidents or stored_result is None:

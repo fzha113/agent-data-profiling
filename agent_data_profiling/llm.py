@@ -466,24 +466,35 @@ def build_incident_llm_context(
         dict: Compact incident context suitable for AI Gateway input.
     """
     incident = incident_rows.iloc[0] if not incident_rows.empty else pd.Series(dtype=object)
+    incident_payload = {
+        "incident_id": incident_id,
+        "station": _json_safe_scalar(incident.get("station")),
+        "source_table": _json_safe_scalar(incident.get("source_table")),
+        "tag_name": tag,
+        "rule_type": _json_safe_scalar(incident.get("rule_type")),
+        "status": _json_safe_scalar(incident.get("status")),
+        "incident_start_utc": _format_utc(incident_start),
+        "incident_end_utc": _format_utc(incident_end),
+        "incident_start_nzt": _format_nzt(incident_start),
+        "incident_end_nzt": _format_nzt(incident_end),
+    }
+    outlier_threshold_context = _build_outlier_threshold_context(
+        outlier_thresholds,
+        incident_rows,
+    )
     return {
         "analysis_type": "data_quality_incident",
-        "incident": {
-            "incident_id": incident_id,
-            "station": _json_safe_scalar(incident.get("station")),
-            "source_table": _json_safe_scalar(incident.get("source_table")),
-            "tag_name": tag,
-            "rule_type": _json_safe_scalar(incident.get("rule_type")),
-            "status": _json_safe_scalar(incident.get("status")),
-            "incident_start_nzt": _format_nzt(incident_start),
-            "incident_end_nzt": _format_nzt(incident_end),
-        },
-        "outlier_thresholds": _build_outlier_threshold_context(
-            outlier_thresholds,
-            incident_rows,
-        ),
+        "incident": incident_payload,
+        "outlier_thresholds": outlier_threshold_context,
+        "outlier_trigger": _build_outlier_trigger_summary(outlier_threshold_context),
         "outlier_threshold_windows": _extract_outlier_threshold_windows_from_logs(
             incident_rows,
+        ),
+        "dba_evidence_request": _build_dba_outlier_evidence_request(
+            tag,
+            incident_start,
+            incident_end,
+            outlier_thresholds,
         ),
         "quality_log_rows": _dataframe_records(
             incident_rows,
@@ -576,6 +587,13 @@ def build_supervisor_incident_prompt(
         "agent to infer or rediscover threshold values. Do not say threshold context is missing "
         "when outlier_thresholds are present; only say baseline/provenance is missing if the "
         "workflow did not retrieve how those thresholds were derived. "
+        "If incident_packet.dba_evidence_request.status is ready, the DBA evidence step must "
+        "call workspace.default.get_outlier_threshold_context with exactly the tag_names, "
+        "start_ts_utc, end_ts_utc, lower_threshold, and upper_threshold in "
+        "incident_packet.dba_evidence_request. Treat start_ts_utc and end_ts_utc as UTC "
+        "timestamp arguments for that function. If that DBA function executes, do not describe "
+        "threshold context as missing; compare its returned counts and extrema with the supplied "
+        "thresholds. "
         "Return only the final user-facing conclusion in a concise format. "
         "Do not mention graph knowledge, Graphify, station context, or process context unless "
         "the user explicitly asks. Do not invent SQL results, measurements, thresholds, tags, "
@@ -788,6 +806,22 @@ def _format_nzt(value) -> str | None:
     return f"{timestamp.tz_convert(DISPLAY_TIMEZONE):%Y-%m-%d %H:%M} NZT"
 
 
+def _format_utc(value) -> str | None:
+    if value is None or pd.isna(value):
+        return None
+
+    timestamp = _to_utc_timestamp(value)
+    return f"{timestamp:%Y-%m-%d %H:%M:%S} UTC"
+
+
+def _format_utc_sql_timestamp(value) -> str | None:
+    if value is None or pd.isna(value):
+        return None
+
+    timestamp = _to_utc_timestamp(value)
+    return f"{timestamp:%Y-%m-%d %H:%M:%S}"
+
+
 def _to_utc_timestamp(value) -> pd.Timestamp:
     timestamp = pd.Timestamp(value)
     if timestamp.tzinfo is None:
@@ -953,6 +987,71 @@ def _build_outlier_threshold_context(
     context.setdefault("lower_threshold", _json_safe_threshold_number(lower_threshold))
     context.setdefault("upper_threshold", _json_safe_threshold_number(upper_threshold))
     return context
+
+
+def _build_dba_outlier_evidence_request(
+    tag: str,
+    incident_start: datetime,
+    incident_end: datetime,
+    outlier_thresholds: tuple[float, float] | None,
+) -> dict:
+    if outlier_thresholds is None:
+        return {
+            "status": "not_ready",
+            "reason": "outlier_thresholds unavailable in incident packet",
+        }
+
+    lower_threshold, upper_threshold = outlier_thresholds
+    return {
+        "status": "ready",
+        "function_name": "workspace.default.get_outlier_threshold_context",
+        "tag_names": [tag],
+        "start_ts_utc": _format_utc_sql_timestamp(incident_start),
+        "end_ts_utc": _format_utc_sql_timestamp(incident_end),
+        "lower_threshold": _json_safe_threshold_number(lower_threshold),
+        "upper_threshold": _json_safe_threshold_number(upper_threshold),
+    }
+
+
+def _build_outlier_trigger_summary(threshold_context: dict | None) -> dict:
+    if not threshold_context:
+        return {
+            "status": "not_available",
+            "reason": "outlier threshold context unavailable",
+        }
+
+    required_values = {
+        key: threshold_context.get(key)
+        for key in ("recent_min", "recent_max", "lower_threshold", "upper_threshold")
+    }
+    if any(value is None for value in required_values.values()):
+        return {
+            "status": "not_available",
+            "reason": "recent extrema or thresholds unavailable",
+        }
+
+    recent_min = float(required_values["recent_min"])
+    recent_max = float(required_values["recent_max"])
+    lower_threshold = float(required_values["lower_threshold"])
+    upper_threshold = float(required_values["upper_threshold"])
+    below_lower_threshold = recent_min < lower_threshold
+    above_upper_threshold = recent_max > upper_threshold
+    breached_thresholds = []
+    if below_lower_threshold:
+        breached_thresholds.append("lower")
+    if above_upper_threshold:
+        breached_thresholds.append("upper")
+
+    return {
+        "status": "breached" if breached_thresholds else "not_breached",
+        "breached_thresholds": breached_thresholds,
+        "recent_min": _json_safe_threshold_number(recent_min),
+        "recent_max": _json_safe_threshold_number(recent_max),
+        "lower_threshold": _json_safe_threshold_number(lower_threshold),
+        "upper_threshold": _json_safe_threshold_number(upper_threshold),
+        "below_lower_threshold": below_lower_threshold,
+        "above_upper_threshold": above_upper_threshold,
+    }
 
 
 def _extract_outlier_threshold_context_from_logs(

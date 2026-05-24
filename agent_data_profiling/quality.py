@@ -191,14 +191,15 @@ def build_incident_tag_history_query(
 
 def build_recent_incidents_query(
     config: DataQualityConfig,
-    since_time: datetime,
+    _since_time: datetime,
 ) -> tuple[str, list[object]]:
     """
-    Build a query for recent failed data quality incidents and matched log rows.
+    Build a query for failed data quality incidents and matched log rows.
 
     Args:
         config: Data quality runtime configuration.
-        since_time: Lower bound for recently updated incidents.
+        _since_time: Retained for caller compatibility; failed demo incidents are not
+            filtered by update time.
 
     Returns:
         tuple[str, list[object]]: SQL text and positional parameters.
@@ -253,11 +254,9 @@ def build_recent_incidents_query(
         LEFT JOIN feedback
           ON feedback.incident_id = incident.incident_id
         WHERE incident.status = 'failed'{source_filter_sql}
-          AND (incident.update_ts >= ? OR feedback.feedback_count IS NULL)
         ORDER BY incident.update_ts DESC, incident.incident_start DESC, quality_log.window_start
     """
 
-    parameters.append(since_time)
     return sql, parameters
 
 
@@ -373,11 +372,11 @@ def fetch_recent_quality_incidents(
     since_time: datetime,
 ):
     """
-    Fetch recent failed monitor incidents and their matched quality log rows.
+    Fetch failed monitor incidents and their matched quality log rows.
 
     Args:
         config: Data quality runtime configuration.
-        since_time: Lower bound for recently updated incidents.
+        since_time: Retained for caller compatibility; not used to filter demo incidents.
 
     Returns:
         pandas.DataFrame: Joined incident and quality log rows.
